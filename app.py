@@ -303,52 +303,127 @@ def fetch_selfservice_schedule(days_ahead: int) -> tuple[list[dict[str, Any]], s
         return [], "Indtast brugernavn og adgangskode i .env"
 
     try:
-        import requests
         from bs4 import BeautifulSoup
+        from playwright.sync_api import sync_playwright
     except ImportError as exc:
         return [], f"Afhængighed mangler: {exc}"
 
+    html = None
     try:
-        session = requests.Session()
-        session.headers.update({"User-Agent": "Mozilla/5.0"})
-        response = session.get(settings["url"], timeout=20)
-        response.raise_for_status()
-        html = response.text
-    except requests.RequestException as exc:
-        return [], f"Kunne ikke hente fra SelfService: {exc}"
+        with sync_playwright() as p:
+            # Start browser
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.set_default_timeout(30000)
+            
+            # Navigér til login-siden
+            page.goto(settings["url"], wait_until="load")
+            
+            # Log initial HTML for debugging
+            initial_html = page.content()
+            debug_path = OUTPUT_DIR / "debug_initial.log"
+            with debug_path.open("w", encoding="utf-8") as f:
+                f.write(initial_html[:10000])
+            
+            # Tjek om vi er på login-siden
+            if "Username" in initial_html or "Password" in initial_html:
+                # Udfyld login-form
+                page.fill("input#Username", settings["user"])
+                page.fill("input#Password", settings["pass"])
+                
+                # SelfService bruger en custom div for login-knappen
+                # Prøv først #LoginButton, så fallback til andre muligheder
+                selectors_to_try = [
+                    "#LoginButton",
+                    "div.DarkButton",
+                    "button[type='submit']",
+                    "input[type='submit']",
+                ]
+                
+                clicked = False
+                for selector in selectors_to_try:
+                    try:
+                        page.click(selector, timeout=5000)
+                        clicked = True
+                        break
+                    except:
+                        pass
+                
+                if not clicked:
+                    return [], "Kunne ikke finde login-knap"
+                
+                # Vent på at dashboard loader
+                try:
+                    page.wait_for_url("**/Assignments**", timeout=15000)
+                except:
+                    pass  # URL kan være anderledes
+                
+                # Vent på at loading-dialog forsvinder
+                try:
+                    page.wait_for_selector("#Loading", state="hidden", timeout=15000)
+                except:
+                    pass
+                
+                # Vent på at siden bliver idle
+                page.wait_for_load_state("networkidle", timeout=20000)
+            
+            # Hent HTML efter at alt har ladet
+            html = page.content()
+            
+            # DEBUG: Log HTML
+            debug_path = OUTPUT_DIR / "debug_html.log"
+            with debug_path.open("w", encoding="utf-8") as f:
+                f.write(html[:50000])  # Øg til 50KB for bedre debugging
+            
+            browser.close()
+            
+    except Exception as exc:
+        return [], f"Fejl ved henting af schedule: {str(exc)}"
 
+    if not html:
+        return [], "Kunne ikke hente HTML fra SelfService"
+
+    # Parse HTML med BeautifulSoup
     soup = BeautifulSoup(html, "html.parser")
     
-    # DEBUG: Log HTML-struktur til fil for debugging
-    debug_path = OUTPUT_DIR / "debug_html.log"
-    with debug_path.open("w", encoding="utf-8") as f:
-        f.write(html[:5000])  # Første 5000 karakterer
+    # Tjek om vi kunne logge ind (hvis vi er tilbage på login-siden)
+    if "Username" in html and "Password" in html:
+        return [], "Login mislykkedes - tjek brugernavn og adgangskode"
     
-    rows = []
-    for table in soup.find_all("table"):
-        for row in table.find_all("tr"):
-            cells = [cell.get_text(" ", strip=True) for cell in row.find_all(["th", "td"])]
-            if len(cells) >= 2:
-                rows.append(cells)
-
+    if "Arbejdskalender" not in html:
+        return [], "Siden loadede ikke korrekt - ikke på arbejdskalender siden"
+    
+    # Søg efter vagt-data i kalenderen
     shifts: list[dict[str, Any]] = []
-    for cells in rows:
-        if not cells:
-            continue
-        if len(cells) >= 3:
-            first = cells[0]
-            second = cells[1]
-            third = cells[2]
-            if re.search(r"\d{1,2}:\d{2}", second) or re.search(r"\d{1,2}:\d{2}", third):
-                shift_id = first
-                shift_from = second if re.search(r"\d{1,2}:\d{2}", second) else ""
-                shift_to = third if re.search(r"\d{1,2}:\d{2}", third) else ""
-                shifts.append({"id": shift_id, "from": shift_from, "to": shift_to})
-        elif len(cells) >= 2 and re.search(r"(fri|vacation|stregdag)", cells[0], re.IGNORECASE):
-            shifts.append({"id": cells[0], "from": "", "to": ""})
+    
+    # SelfService bruger tider i formatet HH:MM
+    # Søg efter alle elementer der indeholder denne pattern
+    seen_time_pairs: set[str] = set()
+    
+    for elem in soup.find_all(True):
+        text = elem.get_text(" ", strip=True)
+        
+        # Søg efter tid-mønstre (HH:MM)
+        if re.search(r"\d{1,2}:\d{2}", text) and len(text) < 200:
+            # Ekstrakt tider
+            times = re.findall(r"(\d{1,2}:\d{2})", text)
+            if times and len(times) >= 1:
+                from_time = times[0]
+                to_time = times[1] if len(times) > 1 else ""
+                
+                # Lav unik nøgle for at undgå duplikater
+                time_pair = f"{from_time}-{to_time}"
+                if time_pair not in seen_time_pairs:
+                    seen_time_pairs.add(time_pair)
+                    shift_title = text[:40] if text else f"{from_time} - {to_time}"
+                    shifts.append({
+                        "id": shift_title[:30],
+                        "from": from_time,
+                        "to": to_time,
+                    })
 
     if not shifts:
-        return [], "Ingen vagter kunne læses fra siden. Se debug_html.log i output-mappen for HTML-strukturen."
+        return [], "Ingen vagter fundet i kalenderen - muligvis ingen vagter planlagt"
 
     today = date.today()
     events: list[dict[str, Any]] = []
@@ -357,7 +432,7 @@ def fetch_selfservice_schedule(days_ahead: int) -> tuple[list[dict[str, Any]], s
             shift_date = (today + timedelta(days=offset)).strftime("%Y-%m-%d")
             events.append(build_event_from_shift(shift, shift_date))
 
-    return events, "Synkronisering gennemført"
+    return events, f"Synkronisering gennemført - {len(shifts)} vagter hentet"
 
 
 @app.route("/")
