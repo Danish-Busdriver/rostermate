@@ -127,6 +127,7 @@ def save_settings(settings: dict[str, Any]) -> None:
 def calculate_next_sync(employment_type: str) -> str:
     """Calculate next scheduled sync time based on employment type."""
     now = datetime.now()
+    weekday_names = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag", "Søndag"]
     
     if employment_type == "fast_turnus":
         # Fast turnus: sync on Tuesday and Friday at 14:00
@@ -163,11 +164,15 @@ def calculate_next_sync(employment_type: str) -> str:
             while next_sync.weekday() not in sync_days:
                 next_sync = next_sync + timedelta(days=1)
         
-        return next_sync.strftime("%A kl. %H:%M") if next_sync else "Ukendt"
+        if next_sync:
+            day_name = weekday_names[next_sync.weekday()]
+            return f"{day_name} kl. {next_sync.strftime('%H:%M')}"
+        return "Ukendt"
     else:
         # Ramme ansat: sync every hour
         next_hour = now + timedelta(hours=1)
-        return next_hour.strftime("%A kl. %H:%M")
+        day_name = weekday_names[next_hour.weekday()]
+        return f"{day_name} kl. {next_hour.strftime('%H:%M')}"
 
 
 def save_settings(settings: dict[str, Any]) -> None:
