@@ -11,10 +11,17 @@ RosterMate kører lokalt på din egen computer. Dine loginoplysninger forlader a
 
 Funktioner
 ✅ Automatisk synkronisering hver time
+
 ✅ Synkroniser 1–30 dage frem
+
 ✅ Understøtter arbejdsdage, Fri, Vacation og Stregdag
+
 ✅ Dashboard på http://localhost:8080
+
 ✅ Lokal ICS-kalender
+
 ✅ Kan bevare historiske vagter
+
 ✅ Automatisk opstart med macOS
+
 ✅ Menu-bar ikon med status
