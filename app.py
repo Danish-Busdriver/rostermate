@@ -318,6 +318,12 @@ def fetch_selfservice_schedule(days_ahead: int) -> tuple[list[dict[str, Any]], s
         return [], f"Kunne ikke hente fra SelfService: {exc}"
 
     soup = BeautifulSoup(html, "html.parser")
+    
+    # DEBUG: Log HTML-struktur til fil for debugging
+    debug_path = OUTPUT_DIR / "debug_html.log"
+    with debug_path.open("w", encoding="utf-8") as f:
+        f.write(html[:5000])  # Første 5000 karakterer
+    
     rows = []
     for table in soup.find_all("table"):
         for row in table.find_all("tr"):
@@ -342,7 +348,7 @@ def fetch_selfservice_schedule(days_ahead: int) -> tuple[list[dict[str, Any]], s
             shifts.append({"id": cells[0], "from": "", "to": ""})
 
     if not shifts:
-        return [], "Ingen vagter kunne læses fra siden. Juster parseren til den faktiske HTML-struktur."
+        return [], "Ingen vagter kunne læses fra siden. Se debug_html.log i output-mappen for HTML-strukturen."
 
     today = date.today()
     events: list[dict[str, Any]] = []
@@ -439,8 +445,46 @@ def index() -> str:
                 .field select { margin-top: 0.25rem; width: 100%; padding: 0.6rem 0.75rem; border-radius: 10px; border: 1px solid var(--border); }
                 .field label { font-size: 0.9rem; color: var(--muted); }
             </style>
+            <script>
+                function showNotification(message, type = 'success') {
+                    const notif = document.getElementById('notification');
+                    const text = document.getElementById('notification-text');
+                    text.textContent = message;
+                    notif.style.background = type === 'error' ? '#ef4444' : '#10b981';
+                    notif.style.display = 'block';
+                    setTimeout(() => {
+                        notif.style.display = 'none';
+                        if (type === 'success') {
+                            setTimeout(() => location.reload(), 1000);
+                        }
+                    }, 3000);
+                }
+                
+                function handleFormSubmit(e, endpoint) {
+                    e.preventDefault();
+                    const form = e.target;
+                    const formData = new FormData(form);
+                    
+                    fetch(endpoint, {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.status === 'ok') {
+                            showNotification(data.message || 'Færdig', 'success');
+                        } else {
+                            showNotification(data.message || 'Fejl', 'error');
+                        }
+                    })
+                    .catch(err => showNotification('Netværksfejl: ' + err.message, 'error'));
+                }
+            </script>
         </head>
         <body>
+            <div id="notification" style="display:none; position:fixed; top:20px; right:20px; background:#10b981; color:white; padding:1rem 1.5rem; border-radius:12px; box-shadow:0 10px 25px rgba(0,0,0,0.2); z-index:9999; max-width:400px; font-weight:600;">
+                <span id="notification-text"></span>
+            </div>
             <div class="container">
                 <div class="hero">
                     <div class="hero-top">
@@ -468,7 +512,7 @@ def index() -> str:
                     </div>
                     <div class="card">
                         <span class="pill">Synkronisering</span>
-                        <form action="/sync" method="post">
+                        <form onsubmit="handleFormSubmit(event, '/sync')">
                             <div class="field">
                                 <label for="days_ahead">Dage frem</label>
                                 <select name="days_ahead" id="days_ahead">
@@ -504,7 +548,7 @@ def index() -> str:
                     </div>
                     <div class="card">
                         <h2>Indstillinger</h2>
-                        <form action="/settings" method="post">
+                        <form onsubmit="handleFormSubmit(event, '/settings')">
                             <div class="field">
                                 <label for="employment_type">Arbejdstype</label>
                                 <select name="employment_type" id="employment_type">
