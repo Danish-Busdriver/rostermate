@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/Danish-Busdriver/rostermate/blob/main/Rostermate.png" width="180">
+  <img src="assets/logo.png" width="180" alt="RosterMate logo">
 </p>
 
 <h1 align="center">
@@ -7,240 +7,243 @@
 </h1>
 
 <p align="center">
-Automatisk synkronisering af dine vagter fra SelfService direkte til din kalender.
+Et lokalt macOS-projekt til at hjælpe buschauffører med at holde styr på vagter, ændringer og historik.
 </p>
 
 <p align="center">
-
-![Platform](https://img.shields.io/badge/macOS-Supported-blue)
-
-![Python](https://img.shields.io/badge/Python-3.11+-green)
-
-![Version](https://img.shields.io/badge/Version-0.6-orange)
-
-![License](https://img.shields.io/badge/License-MIT-red)
-
+  <img src="https://img.shields.io/badge/platform-macOS-blue" alt="macOS">
+  <img src="https://img.shields.io/badge/python-3.12%2B-green" alt="Python 3.12+">
+  <img src="https://img.shields.io/badge/flask-3.x-blue" alt="Flask">
+  <img src="https://img.shields.io/badge/license-MIT-red" alt="MIT license">
 </p>
 
 ---
 
-# 📅 Hvad er RosterMate?
+# Om projektet
 
-RosterMate henter automatisk dine vagter fra **SelfService Danmark** og synkroniserer dem direkte til din personlige kalender.
+RosterMate er et simpelt og stabilt værktøj til at håndtere buschaufførers vagter.
 
-Programmet kører **100% lokalt** på din computer og kræver ingen cloud-tjenester.
+Projektet er bygget som en lokal macOS-webapp i Python og Flask, så det kan udvikles og bruges uden at kræve en cloud-løsning. Formålet er at gøre det lettere at:
 
-Dine loginoplysninger bliver aldrig sendt videre til tredjepart.
+- importere vagtplaner
+- sammenligne gamle og nye planer
+- registrere ændringer
+- gemme historik
+- få et overskueligt dashboard
+- lave sikkerhedskopier af data
 
----
-
-# ✨ Funktioner
-
-✅ Automatisk login til SelfService
-
-✅ Synkronisering hver time
-
-✅ Synkroniser 1-30 dage frem
-
-✅ Dashboard på localhost
-
-✅ Lokal ICS-kalender
-
-✅ Menu Bar App
-
-✅ Automatisk opstart
-
-✅ Behold historiske vagter
+Dette er et tidligt, men solidt fundament til en senere macOS-app med flere funktioner.
 
 ---
 
-# 📸 Screenshots
+# Nuværende funktioner
 
-## Dashboard
-
-> *(Indsæt screenshot her)*
-
-![Dashboard](images/dashboard.png)
-
----
-
-## Menu Bar
-
-> *(Indsæt screenshot her)*
-
-![Menu](images/menubar.png)
+- Dashboard til visning af importerede vagter
+- Import af planer via JSON
+- Sammenligning af gamle og nye planer
+- Registrering af ændringer i historik
+- Backup af historikdata
+- Lokal webserver på localhost
+- Enkel synkronisering med SelfService-oplysninger
+- Enkle tests for kernefunktioner
 
 ---
 
-## Installation
+# Teknologi
 
-> *(Indsæt screenshot her)*
-
-![Install](images/install.png)
-
----
-
-# 🚀 Installation
-
-## 1. Download
-
-Download den seneste version under **Releases**.
+- Python 3.12+
+- Flask
+- HTML
+- CSS
+- JavaScript
+- JSON
+- pytest
+- Git and GitHub
 
 ---
 
-## 2. Pak ZIP-filen ud
+# Installation
 
-Eksempel
+## Hurtigstart på macOS (anbefalet)
 
-```
-Downloads
-└── RosterMate
-```
+Hvis du vil have det nemmeste setup på macOS, kan du bruge de medfølgende skripter:
 
----
-
-## 3. Start installationen
-
-Dobbeltklik på
-
-```
-install.command
+```bash
+git clone https://github.com/Danish-Busdriver/rostermate.git
+cd rostermate
+chmod +x install.command run.command
+./install.command
+./run.command
 ```
 
-Hvis macOS spørger:
+Det vil:
 
-> Højreklik → Åbn
+- oprette et virtuelt miljø
+- installere afhængigheder
+- lave en .env fra skabelonen, hvis den mangler
+- starte appen lokalt
 
----
+Åbn derefter:
 
-## 4. Indtast oplysninger
-
-Installationsprogrammet spørger om
-
-```
-SelfService brugernavn
-```
-
-og
-
-```
-SelfService adgangskode
+```text
+http://127.0.0.1:8080
 ```
 
----
+## Manuel installation
 
-## 5. Vent
+### 1. Klon repository
 
-RosterMate installerer automatisk
-
-- Python
-- Playwright
-- Browser
-- Menu Bar App
-- Automatisk opstart
-
----
-
-## 6. Åbn Dashboard
-
-```
-http://localhost:8080
+```bash
+git clone https://github.com/Danish-Busdriver/rostermate.git
+cd rostermate
 ```
 
-Her kan du
+### 2. Opret et virtuelt miljø
 
-- Synkronisere nu
-- Se status
-- Ændre antal dage
-- Downloade kalender
-- Se de næste vagter
-
----
-
-# 📱 Tilføj kalender på iPhone
-
-Åbn
-
-```
-Indstillinger
-
-↓
-
-Kalender
-
-↓
-
-Konti
-
-↓
-
-Tilføj kalenderabonnement
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-Indsæt
+### 3. Installer afhængigheder
 
-```
-http://DIN-MAC-IP:8080/vagter.ics
+```bash
+pip install -r requirements.txt
 ```
 
-Eksempel
+### 4. Opret en lokal .env-fil
 
+```bash
+cp .env.example .env
 ```
-http://192.168.1.25:8080/vagter.ics
+
+Rediger derefter .env og indsæt dine SelfService-oplysninger, hvis du vil bruge synkronisering.
+
+### 5. Start appen
+
+```bash
+python3 app.py
+```
+
+Åbn derefter:
+
+```text
+http://127.0.0.1:8080
 ```
 
 ---
 
-# 🔄 Automatisk synkronisering
+# Kør tests
 
-RosterMate
-
-- starter automatisk når Mac starter
-- synkroniserer hver time
-- viser status i Menu Bar
-- kan synkroniseres manuelt
+```bash
+pytest -q
+```
 
 ---
 
-# 🔒 Privatliv
+# Projektstruktur
 
-RosterMate sender **ingen data** til tredjepart.
-
-✔ Login gemmes lokalt
-
-✔ Ingen cloud
-
-✔ Ingen tracking
-
-✔ Ingen reklamer
-
-✔ Open Source
+```text
+.
+├── app.py
+├── requirements.txt
+├── README.md
+├── LICENSE
+├── .gitignore
+├── .env.example
+├── install.command
+├── run.command
+├── assets/
+│   ├── logo.png
+│   └── screenshots/
+├── docs/
+│   ├── BETA_WORKFLOW.md
+│   └── BEGINNER_WORKFLOW.md
+├── static/
+├── tests/
+│   └── test_sync.py
+└── RosterMate.app/
+```
 
 ---
 
-# 🗺 Roadmap
+# Screenshots
 
-## Version 0.7
+Her er et par billeder af dashboardet og appens visuelle profil:
 
-- [ ] Notifikation ved ændret vagt
-- [ ] Historik over ændringer
-- [ ] Flere kalendere
-- [ ] Bedre Dashboard
+# Screenshots
+
+Her er billeder af dashboardet i RosterMate:
+
+### Dashboard
+
+[![Dashboard](https://github.com/Danish-Busdriver/rostermate/raw/main/assets/screenshots/dashboard.png)](https://github.com/Danish-Busdriver/rostermate/blob/main/assets/screenshots/dashboard.png)
+
+### Oversigt over vagter
+
+[![Oversigt](https://github.com/Danish-Busdriver/rostermate/raw/main/assets/screenshots/overview.png)](https://github.com/Danish-Busdriver/rostermate/blob/main/assets/screenshots/overview.png)
 
 ---
 
-## Version 0.8
+# Release-flow og beta-test
 
-- [ ] Widgets
-- [ ] Home Assistant Integration
+For at gøre det enkelt og stabilt anbefaler jeg denne opsætning:
+
+- main: stabil version til andre brugere
+- beta: din egen test-version
+
+Det betyder, at du tester nye ændringer i beta først, og først når de virker, flytter du dem til main.
+
+Se mere i [docs/BETA_WORKFLOW.md](docs/BETA_WORKFLOW.md) og [docs/BEGINNER_WORKFLOW.md](docs/BEGINNER_WORKFLOW.md).
+
 ---
 
-# 👨‍💻 Udviklet af
+# Roadmap
 
-**Daniel Pullen**
+## Version 1.0
+
+- [x] Import af vagtplan
+- [x] Sammenligning af vagter
+- [x] Dashboard
+- [x] Historik
+- [x] Backup
+- [x] Lokal webserver
+
+## Version 1.1
+
+- [ ] GitHub integration
+- [ ] Automatiske opdateringer
+- [ ] Release-system
+- [ ] Backup før opdatering
+
+## Version 1.2
+
+- [x] Native macOS-app bundle
+- [x] Dock icon
+- [ ] Menu bar
+- [ ] Notifikationer
+- [ ] Launch at login
+
+---
+
+# Bidrag
+
+Projektet er tænkt som et stabilt open source-projekt. Små, veldefinerede ændringer foretrækkes frem for store omskrivninger.
+
+Hvis du vil bidrage, er det bedst at starte med en lille forbedring og beskrive ændringen tydeligt.
+
+---
+
+# Licens
+
+Dette projekt er licenseret under MIT-licensen.
+
+---
+
+# Udviklet af
+
+Daniel Pullen
 
 Buschauffør • Disponent • Software-entusiast
 
-GitHub:
-
-https://github.com/Danish-Busdriver
+GitHub: https://github.com/Danish-Busdriver
