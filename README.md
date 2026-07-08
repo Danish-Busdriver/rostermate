@@ -66,30 +66,37 @@ Dette er et tidligt, men solidt fundament til en senere macOS-app med flere funk
 
 ## Hurtigstart på macOS (anbefalet)
 
-Hvis du vil have det nemmeste setup på macOS, kan du bruge de medfølgende skripter:
+Hele installationen klares via to shell-scripts som følger med repoet:
 
 ```bash
+# 1. Klon repository (henter alle filer inklusive install-scripts)
 git clone https://github.com/Danish-Busdriver/rostermate.git
 cd rostermate
+
+# 2. Gør scripts executable
 chmod +x install.command run.command
+
+# 3. Kør installation
 ./install.command
+
+# 4. Start appen
 ./run.command
 ```
 
-Det vil:
+**Det er alt der skal til!** Scriptene håndterer:
+- Oprettelse af virtuelt Python-miljø
+- Installation af alle afhængigheder
+- Opsætning af .env fra skabelonen
+- Start af webserveren lokalt
 
-- oprette et virtuelt miljø
-- installere afhængigheder
-- lave en .env fra skabelonen, hvis den mangler
-- starte appen lokalt
-
-Åbn derefter:
-
-```text
+Når det er færdigt åbnes appen automatisk på:
+```
 http://127.0.0.1:8080
 ```
 
-## Manuel installation
+## Manuel installation (hvis scripts ikke virker)
+
+Hvis shell-scripts ikke virker på dit system, kan du installere manuelt:
 
 ### 1. Klon repository
 
