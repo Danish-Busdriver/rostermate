@@ -395,42 +395,48 @@ def fetch_selfservice_schedule(days_ahead: int) -> tuple[list[dict[str, Any]], s
     
     # Søg efter vagt-data i kalenderen
     shifts: list[dict[str, Any]] = []
+    seen_shifts: set[str] = set()
     
     # SelfService bruger tider i formatet HH:MM
-    # Søg efter alle elementer der indeholder denne pattern
-    seen_time_pairs: set[str] = set()
-    
+    # Søg efter elementer der indeholder "NUMBER ID:" (f.eks. "29 ID:") hvilket betyder det er en komplet vagt
     for elem in soup.find_all(True):
         text = elem.get_text(" ", strip=True)
         
-        # Søg efter tid-mønstre (HH:MM)
-        if re.search(r"\d{1,2}:\d{2}", text) and len(text) < 200:
-            # Ekstrakt tider
-            times = re.findall(r"(\d{1,2}:\d{2})", text)
-            if times and len(times) >= 1:
-                from_time = times[0]
-                to_time = times[1] if len(times) > 1 else ""
-                
-                # Lav unik nøgle for at undgå duplikater
-                time_pair = f"{from_time}-{to_time}"
-                if time_pair not in seen_time_pairs:
-                    seen_time_pairs.add(time_pair)
-                    shift_title = text[:40] if text else f"{from_time} - {to_time}"
-                    shifts.append({
-                        "id": shift_title[:30],
-                        "from": from_time,
-                        "to": to_time,
-                    })
+        # Skal indeholde "NUMBER ID:" format, ikke bare "ID:"
+        if not re.search(r"\d+\s+ID:", text):
+            continue
+        
+        # Find alle tider i dette element
+        times = re.findall(r"(\d{1,2}:\d{2})", text)
+        
+        # Skal have mindst 2 tider (Fra og Til)
+        if len(times) >= 2:
+            from_time = times[0]
+            to_time = times[1]
+            
+            # Ekstrakt ID-delen med regex (nummer + "ID:" + navn - gemmes fuldt)
+            id_match = re.search(r"(\d+\s+ID:\s+[A-Za-z_]+)", text)
+            id_part = id_match.group(1).strip() if id_match else f"Vagt {from_time}-{to_time}"
+            
+            # Lav unik nøgle for at undgå duplikater
+            shift_key = f"{id_part}_{from_time}_{to_time}"
+            if shift_key not in seen_shifts:
+                seen_shifts.add(shift_key)
+                shifts.append({
+                    "id": id_part[:40],
+                    "from": from_time,
+                    "to": to_time,
+                })
 
     if not shifts:
         return [], "Ingen vagter fundet i kalenderen - muligvis ingen vagter planlagt"
 
     today = date.today()
     events: list[dict[str, Any]] = []
+    # Hvert shift får en event med dagens dato (ikke duplikeret for hver dag)
     for shift in shifts:
-        for offset in range(days_ahead + 1):
-            shift_date = (today + timedelta(days=offset)).strftime("%Y-%m-%d")
-            events.append(build_event_from_shift(shift, shift_date))
+        shift_date = today.strftime("%Y-%m-%d")
+        events.append(build_event_from_shift(shift, shift_date))
 
     return events, f"Synkronisering gennemført - {len(shifts)} vagter hentet"
 
@@ -444,6 +450,32 @@ def index() -> str:
     last_sync = "Aldrig"
     if events:
         last_sync = datetime.now().strftime("%Y-%m-%d %H:%M")
+    
+    # Gruppér vagter: tag kun de første forekomster af hver unik vagt
+    # sorteret efter dato, max 7 vagter
+    seen_titles: set[str] = set()
+    next_shifts = []
+    for event in sorted(events, key=lambda e: e.get("date", "")):
+        title = event.get("title", "Ukendt")
+        if title not in seen_titles and len(next_shifts) < 7:
+            seen_titles.add(title)
+            # Formatér: "DO_afl - Fra: 08:00 Til: 15:24 (dato)" - udvind kun dele efter "ID:"
+            display_name = title
+            if "ID:" in title:
+                # Ekstrakt delen efter "ID: " f.eks. "DO_afl" fra "29 ID: DO_afl"
+                id_match = re.search(r"ID:\s+([A-Za-z_]+)", title)
+                if id_match:
+                    display_name = id_match.group(1)
+            
+            start_time = event.get("start", "").split("T")[1][:5] if "T" in event.get("start", "") else ""
+            end_time = event.get("end", "").split("T")[1][:5] if "T" in event.get("end", "") else ""
+            date_str = event.get("date", "")
+            formatted_title = f"{display_name} - Fra: {start_time} Til: {end_time} ({date_str})" if start_time else f"{display_name} ({date_str})"
+            next_shifts.append({
+                "title": formatted_title,
+                "date": date_str,
+            })
+    
     return render_template_string(
         """
         <!doctype html>
@@ -604,8 +636,8 @@ def index() -> str:
                     <div class="card">
                         <h2>Næste vagter</h2>
                         <ul class="list">
-                            {% for event in events[:7] %}
-                            <li><span>{{ event.get('title', 'Ukendt') }}</span><span class="small">{{ event.get('date', '') }}</span></li>
+                            {% for shift in next_shifts %}
+                            <li><span>{{ shift.get('title', 'Ukendt') }}</span></li>
                             {% else %}
                             <li>Ingen kalenderposter endnu.</li>
                             {% endfor %}
@@ -649,7 +681,7 @@ def index() -> str:
         days_ahead=settings["days_ahead"],
         remove_old_shifts=settings["remove_old_shifts"],
         event_count=len(events),
-        events=events,
+        next_shifts=next_shifts,
         changes=changes,
     )
 
