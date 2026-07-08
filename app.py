@@ -105,6 +105,10 @@ def load_settings() -> dict[str, Any]:
     except (TypeError, ValueError):
         run_every_minutes = 60
 
+    employment_type = stored.get("employment_type", "ramme_ansat")
+    if employment_type not in ("ramme_ansat", "fast_turnus"):
+        employment_type = "ramme_ansat"
+
     return {
         "url": env_values.get("SELFSERVICE_URL", stored.get("url", "https://selfservicedanmark.tidebus.dk")),
         "user": env_values.get("SELFSERVICE_USER", stored.get("user", "")),
@@ -112,7 +116,58 @@ def load_settings() -> dict[str, Any]:
         "days_ahead": max(1, min(days_ahead, 365)),
         "run_every_minutes": max(1, min(run_every_minutes, 10080)),
         "remove_old_shifts": _coerce_bool(env_values.get("REMOVE_OLD_SHIFTS", stored.get("remove_old_shifts", False))),
+        "employment_type": employment_type,
     }
+
+
+def save_settings(settings: dict[str, Any]) -> None:
+    save_json(SETTINGS_PATH, settings)
+
+
+def calculate_next_sync(employment_type: str) -> str:
+    """Calculate next scheduled sync time based on employment type."""
+    now = datetime.now()
+    
+    if employment_type == "fast_turnus":
+        # Fast turnus: sync on Tuesday and Friday at 14:00
+        current_weekday = now.weekday()  # Monday=0, Sunday=6
+        current_hour = now.hour
+        
+        # Tuesday (1) and Friday (4)
+        sync_days = [1, 4]
+        sync_hour = 14
+        
+        # Find next sync day
+        next_sync = None
+        
+        # Check if today is a sync day and time hasn't passed
+        if current_weekday in sync_days and current_hour < sync_hour:
+            next_sync = now.replace(hour=sync_hour, minute=0, second=0, microsecond=0)
+        else:
+            # Find next sync day
+            days_ahead = 0
+            for _ in range(7):
+                check_day = (current_weekday + days_ahead) % 7
+                if check_day in sync_days:
+                    if days_ahead == 0 and current_hour >= sync_hour:
+                        days_ahead = 1
+                        continue
+                    next_sync_date = now + timedelta(days=days_ahead)
+                    next_sync = next_sync_date.replace(hour=sync_hour, minute=0, second=0, microsecond=0)
+                    break
+                days_ahead += 1
+        
+        if next_sync and next_sync <= now:
+            # If calculated time is in the past, move to next cycle
+            next_sync = next_sync + timedelta(days=1)
+            while next_sync.weekday() not in sync_days:
+                next_sync = next_sync + timedelta(days=1)
+        
+        return next_sync.strftime("%A kl. %H:%M") if next_sync else "Ukendt"
+    else:
+        # Ramme ansat: sync every hour
+        next_hour = now + timedelta(hours=1)
+        return next_hour.strftime("%A kl. %H:%M")
 
 
 def save_settings(settings: dict[str, Any]) -> None:
@@ -394,6 +449,12 @@ def index() -> str:
                         <span class="pill">Status</span>
                         <p class="stat">{{ status }}</p>
                         <p class="muted">Sidste sync: {{ last_sync }}</p>
+                        <p class="muted">Næste sync: {{ next_sync }}</p>
+                    </div>
+                    <div class="card">
+                        <span class="pill">Arbejdstype</span>
+                        <p class="muted">{{ employment_type_label }}</p>
+                        <p class="stat" style="font-size: 1.2rem;">{{ employment_type_display }}</p>
                     </div>
                     <div class="card">
                         <span class="pill">Kalenderposter</span>
@@ -438,8 +499,14 @@ def index() -> str:
                     </div>
                     <div class="card">
                         <h2>Indstillinger</h2>
-                        <p class="muted">Fjern gamle vagter: {{ remove_old_shifts }}</p>
                         <form action="/settings" method="post">
+                            <div class="field">
+                                <label for="employment_type">Arbejdstype</label>
+                                <select name="employment_type" id="employment_type">
+                                    <option value="ramme_ansat" {% if employment_type == 'ramme_ansat' %}selected{% endif %}>Ramme ansat (sync hver time)</option>
+                                    <option value="fast_turnus" {% if employment_type == 'fast_turnus' %}selected{% endif %}>Fast turnus (sync tir+fre kl. 14)</option>
+                                </select>
+                            </div>
                             <label class="row"><input type="checkbox" name="remove_old_shifts" value="true" {% if remove_old_shifts %}checked{% endif %}> Fjern gamle vagter</label>
                             <div style="margin-top:0.8rem;"><button type="submit">Gem indstillinger</button></div>
                         </form>
@@ -451,6 +518,10 @@ def index() -> str:
         """,
         status="Klar til sync",
         last_sync=last_sync,
+        next_sync=calculate_next_sync(settings["employment_type"]),
+        employment_type=settings["employment_type"],
+        employment_type_label="Ansættelsesform",
+        employment_type_display="Ramme ansat" if settings["employment_type"] == "ramme_ansat" else "Fast turnus",
         days_ahead=settings["days_ahead"],
         remove_old_shifts=settings["remove_old_shifts"],
         event_count=len(events),
@@ -519,6 +590,10 @@ def settings_route() -> tuple[Any, int]:
     ensure_storage()
     settings = load_settings()
 
+    employment_type = request.form.get("employment_type", settings.get("employment_type", "ramme_ansat"))
+    if employment_type not in ("ramme_ansat", "fast_turnus"):
+        employment_type = "ramme_ansat"
+
     remove_old_shifts = request.form.get("remove_old_shifts") == "true"
     updated_settings = {
         **settings,
@@ -528,9 +603,10 @@ def settings_route() -> tuple[Any, int]:
         "days_ahead": int(request.form.get("days_ahead", settings.get("days_ahead", 7))),
         "run_every_minutes": int(request.form.get("run_every_minutes", settings.get("run_every_minutes", 60))),
         "remove_old_shifts": remove_old_shifts,
+        "employment_type": employment_type,
     }
     save_settings(updated_settings)
-    return jsonify({"status": "ok", "message": "Indstillinger gemt", "remove_old_shifts": remove_old_shifts})
+    return jsonify({"status": "ok", "message": "Indstillinger gemt", "employment_type": employment_type})
 
 
 @app.route("/history")
