@@ -10,6 +10,7 @@ Programmet logger ind på SelfService med dine egne oplysninger, henter dine kom
 RosterMate kører lokalt på din egen computer. Dine loginoplysninger forlader aldrig din enhed.
 
 Funktioner
+
 ✅ Automatisk synkronisering hver time
 
 ✅ Synkroniser 1–30 dage frem
