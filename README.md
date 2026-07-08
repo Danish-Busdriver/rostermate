@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/rostermate-bus-logo.png" width="180">
+  <img src="https://github.com/Danish-Busdriver/rostermate/blob/main/Rostermate.png" width="180">
 </p>
 
 <h1 align="center">
@@ -245,14 +245,6 @@ RosterMate sender **ingen data** til tredjepart.
 
 - [ ] Widgets
 - [ ] Home Assistant Integration
-
----
-# ❤️ Støt projektet
-
-Hvis du synes om RosterMate, må du meget gerne give projektet en ⭐ på GitHub.
-
-Det hjælper andre med at finde projektet.
-
 ---
 
 # 👨‍💻 Udviklet af
