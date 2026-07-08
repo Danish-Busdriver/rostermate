@@ -5,6 +5,7 @@ RosterMate synkroniserer automatisk dine vagter fra SelfService Danmark til din 
 Programmet logger ind på SelfService med dine egne oplysninger, henter dine kommende vagter og opretter en lokal kalender (ICS), som kan bruges i:
 
 🍎 Apple Kalender
+
 💻 macOS
 
 RosterMate kører lokalt på din egen computer. Dine loginoplysninger forlader aldrig din enhed.
