@@ -46,18 +46,6 @@ Dine loginoplysninger bliver aldrig sendt videre til tredjepart.
 
 ✅ Lokal ICS-kalender
 
-✅ Apple Kalender
-
-✅ Google Kalender
-
-✅ Outlook
-
-✅ Fri
-
-✅ Vacation
-
-✅ Stregdag
-
 ✅ Menu Bar App
 
 ✅ Automatisk opstart
