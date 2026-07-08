@@ -1,29 +1,266 @@
+<p align="center">
+  <img src="assets/rostermate-bus-logo.png" width="180">
+</p>
+
+<h1 align="center">
 🚌 RosterMate
+</h1>
 
-RosterMate synkroniserer automatisk dine vagter fra SelfService Danmark til din personlige kalender.
+<p align="center">
+Automatisk synkronisering af dine vagter fra SelfService direkte til din kalender.
+</p>
 
-Programmet logger ind på SelfService med dine egne oplysninger, henter dine kommende vagter og opretter en lokal kalender (ICS), som kan bruges i:
+<p align="center">
 
-🍎 Apple Kalender
+![Platform](https://img.shields.io/badge/macOS-Supported-blue)
 
-💻 macOS
+![Python](https://img.shields.io/badge/Python-3.11+-green)
 
-RosterMate kører lokalt på din egen computer. Dine loginoplysninger forlader aldrig din enhed.
+![Version](https://img.shields.io/badge/Version-0.6-orange)
 
-Funktioner
+![License](https://img.shields.io/badge/License-MIT-red)
 
-✅ Automatisk synkronisering hver time
+</p>
 
-✅ Synkroniser 1–30 dage frem
+---
 
-✅ Understøtter arbejdsdage, Fri, Vacation og Stregdag
+# 📅 Hvad er RosterMate?
 
-✅ Dashboard på http://localhost:8080
+RosterMate henter automatisk dine vagter fra **SelfService Danmark** og synkroniserer dem direkte til din personlige kalender.
+
+Programmet kører **100% lokalt** på din computer og kræver ingen cloud-tjenester.
+
+Dine loginoplysninger bliver aldrig sendt videre til tredjepart.
+
+---
+
+# ✨ Funktioner
+
+✅ Automatisk login til SelfService
+
+✅ Synkronisering hver time
+
+✅ Synkroniser 1-30 dage frem
+
+✅ Dashboard på localhost
 
 ✅ Lokal ICS-kalender
 
-✅ Kan bevare historiske vagter
+✅ Apple Kalender
 
-✅ Automatisk opstart med macOS
+✅ Google Kalender
 
-✅ Menu-bar ikon med status
+✅ Outlook
+
+✅ Fri
+
+✅ Vacation
+
+✅ Stregdag
+
+✅ Menu Bar App
+
+✅ Automatisk opstart
+
+✅ Behold historiske vagter
+
+---
+
+# 📸 Screenshots
+
+## Dashboard
+
+> *(Indsæt screenshot her)*
+
+![Dashboard](images/dashboard.png)
+
+---
+
+## Menu Bar
+
+> *(Indsæt screenshot her)*
+
+![Menu](images/menubar.png)
+
+---
+
+## Installation
+
+> *(Indsæt screenshot her)*
+
+![Install](images/install.png)
+
+---
+
+# 🚀 Installation
+
+## 1. Download
+
+Download den seneste version under **Releases**.
+
+---
+
+## 2. Pak ZIP-filen ud
+
+Eksempel
+
+```
+Downloads
+└── RosterMate
+```
+
+---
+
+## 3. Start installationen
+
+Dobbeltklik på
+
+```
+install.command
+```
+
+Hvis macOS spørger:
+
+> Højreklik → Åbn
+
+---
+
+## 4. Indtast oplysninger
+
+Installationsprogrammet spørger om
+
+```
+SelfService brugernavn
+```
+
+og
+
+```
+SelfService adgangskode
+```
+
+---
+
+## 5. Vent
+
+RosterMate installerer automatisk
+
+- Python
+- Playwright
+- Browser
+- Menu Bar App
+- Automatisk opstart
+
+---
+
+## 6. Åbn Dashboard
+
+```
+http://localhost:8080
+```
+
+Her kan du
+
+- Synkronisere nu
+- Se status
+- Ændre antal dage
+- Downloade kalender
+- Se de næste vagter
+
+---
+
+# 📱 Tilføj kalender på iPhone
+
+Åbn
+
+```
+Indstillinger
+
+↓
+
+Kalender
+
+↓
+
+Konti
+
+↓
+
+Tilføj kalenderabonnement
+```
+
+Indsæt
+
+```
+http://DIN-MAC-IP:8080/vagter.ics
+```
+
+Eksempel
+
+```
+http://192.168.1.25:8080/vagter.ics
+```
+
+---
+
+# 🔄 Automatisk synkronisering
+
+RosterMate
+
+- starter automatisk når Mac starter
+- synkroniserer hver time
+- viser status i Menu Bar
+- kan synkroniseres manuelt
+
+---
+
+# 🔒 Privatliv
+
+RosterMate sender **ingen data** til tredjepart.
+
+✔ Login gemmes lokalt
+
+✔ Ingen cloud
+
+✔ Ingen tracking
+
+✔ Ingen reklamer
+
+✔ Open Source
+
+---
+
+# 🗺 Roadmap
+
+## Version 0.7
+
+- [ ] Notifikation ved ændret vagt
+- [ ] Historik over ændringer
+- [ ] Flere kalendere
+- [ ] Bedre Dashboard
+
+---
+
+## Version 0.8
+
+- [ ] Widgets
+- [ ] Home Assistant Integration
+
+---
+# ❤️ Støt projektet
+
+Hvis du synes om RosterMate, må du meget gerne give projektet en ⭐ på GitHub.
+
+Det hjælper andre med at finde projektet.
+
+---
+
+# 👨‍💻 Udviklet af
+
+**Daniel Pullen**
+
+Buschauffør • Disponent • Software-entusiast
+
+GitHub:
+
+https://github.com/Danish-Busdriver
