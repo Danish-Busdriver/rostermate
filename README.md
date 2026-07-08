@@ -1,7 +1,20 @@
 🚌 RosterMate
 
-Bring your work schedule into Home Assistant
+RosterMate synkroniserer automatisk dine vagter fra SelfService Danmark til din personlige kalender.
 
-Automatically sync your work schedule from your employer and use it throughout Home Assistant.
+Programmet logger ind på SelfService med dine egne oplysninger, henter dine kommende vagter og opretter en lokal kalender (ICS), som kan bruges i:
 
-Perfect for shift workers, bus drivers, nurses, emergency services and anyone working irregular hours.
+🍎 Apple Kalender
+💻 macOS
+
+RosterMate kører lokalt på din egen computer. Dine loginoplysninger forlader aldrig din enhed.
+
+Funktioner
+✅ Automatisk synkronisering hver time
+✅ Synkroniser 1–30 dage frem
+✅ Understøtter arbejdsdage, Fri, Vacation og Stregdag
+✅ Dashboard på http://localhost:8080
+✅ Lokal ICS-kalender
+✅ Kan bevare historiske vagter
+✅ Automatisk opstart med macOS
+✅ Menu-bar ikon med status
