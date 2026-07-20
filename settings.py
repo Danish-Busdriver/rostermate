@@ -8,6 +8,7 @@ def with_setup_defaults(settings: dict[str, Any]) -> dict[str, Any]:
     return {
         **settings,
         "calendar_name": settings.get("calendar_name", "RosterMate"),
+        "google_calendar_name": settings.get("google_calendar_name", "RosterMate"),
         "keep_old_shifts": settings.get("keep_old_shifts", keep_old_shifts),
         "launch_at_login": settings.get("launch_at_login", False),
         "show_menu_bar_icon": settings.get("show_menu_bar_icon", True),

@@ -58,7 +58,7 @@ GOOGLE_TOKEN_PATH = DATA_DIR / "google_token.json"
 GOOGLE_SYNC_STATE_PATH = DATA_DIR / "google_sync_state.json"
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar"]
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 
 
 def is_loopback_request() -> bool:
@@ -265,7 +265,10 @@ def load_settings(driver_id: str) -> dict[str, Any]:
         "employment_type": employment_type,
         "google_client_id": env_values.get("GOOGLE_CLIENT_ID", stored.get("google_client_id", "")),
         "google_client_secret": env_values.get("GOOGLE_CLIENT_SECRET", stored.get("google_client_secret", "")),
-        "google_calendar_id": env_values.get("GOOGLE_CALENDAR_ID", stored.get("google_calendar_id", "primary")),
+        "google_calendar_id": env_values.get("GOOGLE_CALENDAR_ID", stored.get("google_calendar_id", "")),
+        "google_calendar_name": env_values.get(
+            "GOOGLE_CALENDAR_NAME", stored.get("google_calendar_name", "RosterMate")
+        ).strip() or "RosterMate",
         "google_redirect_uri": env_values.get("GOOGLE_REDIRECT_URI", stored.get("google_redirect_uri", "")),
     })
 
@@ -595,9 +598,10 @@ def google_integration_status(settings: dict[str, Any], driver_id: str, token_pa
     credentials_ready = bool(client_id_valid and settings.get("google_client_secret"))
     token_data = load_json(token_path, {})
     connected = bool(token_data.get("refresh_token") or token_data.get("token"))
-    calendar_id = str(settings.get("google_calendar_id") or "primary")
+    calendar_id = str(settings.get("google_calendar_id") or "")
+    calendar_name = str(settings.get("google_calendar_name") or "RosterMate")
     if connected:
-        summary = f"Forbundet til kalender: {calendar_id}"
+        summary = f"Forbundet til Google-kalenderen {calendar_name}."
         tone = "success"
     elif credentials_ready:
         summary = "Google OAuth er klar. Log ind for at forbinde kalenderen."
@@ -614,6 +618,7 @@ def google_integration_status(settings: dict[str, Any], driver_id: str, token_pa
         "client_id_valid": client_id_valid,
         "connected": connected,
         "calendar_id": calendar_id,
+        "calendar_name": calendar_name,
         "redirect_uri": google_redirect_uri(settings, driver_id, base_url),
         "summary": summary,
         "tone": tone,
@@ -665,6 +670,38 @@ def load_google_credentials(token_path: Path) -> Any:
     return credentials
 
 
+def ensure_google_calendar(settings: dict[str, Any], credentials: Any, service: Any | None = None) -> str:
+    """Create RosterMate's secondary calendar, or keep its configured name in sync."""
+    if service is None:
+        from googleapiclient.discovery import build
+        service = build("calendar", "v3", credentials=credentials)
+
+    calendar_name = str(settings.get("google_calendar_name") or "RosterMate").strip() or "RosterMate"
+    calendar_id = str(settings.get("google_calendar_id") or "").strip()
+
+    if calendar_id and calendar_id != "primary":
+        try:
+            existing = service.calendars().get(calendarId=calendar_id).execute()
+            if str(existing.get("summary") or "") != calendar_name:
+                service.calendars().patch(
+                    calendarId=calendar_id,
+                    body={"summary": calendar_name},
+                ).execute()
+            return calendar_id
+        except Exception as exc:
+            status = getattr(exc, "status_code", None) or getattr(getattr(exc, "resp", None), "status", None)
+            if status != 404:
+                raise
+
+    created = service.calendars().insert(
+        body={"summary": calendar_name, "timeZone": LOCAL_TIMEZONE}
+    ).execute()
+    created_id = str(created.get("id") or "").strip()
+    if not created_id:
+        raise RuntimeError("Google returnerede ikke et kalender-id")
+    return created_id
+
+
 def make_google_event_key(event: dict[str, Any]) -> str:
     raw_key = "|".join(
         [
@@ -706,7 +743,9 @@ def sync_google_calendar_events(events: list[dict[str, Any]], settings: dict[str
     from googleapiclient.discovery import build
     from googleapiclient.errors import HttpError
 
-    calendar_id = str(settings.get("google_calendar_id") or "primary")
+    calendar_id = str(settings.get("google_calendar_id") or "").strip()
+    if not calendar_id:
+        raise RuntimeError("Google-kalenderen er ikke oprettet endnu. Log ind med Google igen.")
     service = build("calendar", "v3", credentials=credentials)
     state = load_json(sync_state_path, {"event_map": {}})
     event_map = state.get("event_map", {}) if isinstance(state, dict) else {}
@@ -2748,12 +2787,13 @@ def settings_page(driver_id: str) -> str:
                                 <div class="notice warning" style="margin-top:1rem; margin-bottom:0;">Google-afhængigheder mangler: {{ google_dependency_error }}</div>
                                 {% endif %}
                                 <div class="field">
-                                    <label for="google_calendar_id">Google Calendar ID</label>
-                                    <input id="google_calendar_id" name="google_calendar_id" value="{{ settings.google_calendar_id }}">
+                                    <label for="google_calendar_name">Navn på Google-kalender</label>
+                                    <input id="google_calendar_name" name="google_calendar_name" value="{{ settings.google_calendar_name }}" placeholder="RosterMate">
+                                    <div class="field-hint">RosterMate foreslås automatisk. Du kan vælge et andet navn før login.</div>
                                 </div>
                                 <div class="small" style="margin-top:0.9rem;">Status: {{ google_status.summary }}</div>
                                 <div class="google-actions">
-                                    <a class="ghost-button" href="{{ urls.google_connect_url }}">Log ind med Google</a>
+                                    <a class="ghost-button" href="{{ urls.google_connect_url }}" onclick="this.href='{{ urls.google_connect_url }}?google_calendar_name=' + encodeURIComponent(document.getElementById('google_calendar_name').value || 'RosterMate')">Log ind med Google</a>
                                     <form onsubmit="handleActionSubmit(event, '{{ urls.google_sync_url }}')">
                                         <button type="submit">Synkronisér til Google</button>
                                     </form>
@@ -2775,6 +2815,12 @@ def settings_page(driver_id: str) -> str:
                                         <label for="google_redirect_uri">Redirect URI</label>
                                         <input id="google_redirect_uri" name="google_redirect_uri" value="{{ settings.google_redirect_uri or google_status.redirect_uri }}">
                                     </div>
+                                    {% if settings.google_calendar_id %}
+                                    <div class="field">
+                                        <label>Oprettet Google Calendar ID</label>
+                                        <input value="{{ settings.google_calendar_id }}" readonly>
+                                    </div>
+                                    {% endif %}
                                     <div class="small">Disse felter konfigureres én gang for RosterMate. Derefter bruger du kun “Log ind med Google”.</div>
                                 </details>
                             </div>
@@ -2824,7 +2870,10 @@ def settings_route(driver_id: str) -> tuple[Any, int]:
         "employment_type": employment_type,
         "google_client_id": request.form.get("google_client_id", settings.get("google_client_id", "")).strip(),
         "google_client_secret": request.form.get("google_client_secret", settings.get("google_client_secret", "")).strip(),
-        "google_calendar_id": request.form.get("google_calendar_id", settings.get("google_calendar_id", "primary")).strip() or "primary",
+        "google_calendar_id": settings.get("google_calendar_id", ""),
+        "google_calendar_name": request.form.get(
+            "google_calendar_name", settings.get("google_calendar_name", "RosterMate")
+        ).strip() or "RosterMate",
         "google_redirect_uri": request.form.get("google_redirect_uri", settings.get("google_redirect_uri", "")).strip(),
         "calendar_public_base_url": request.form.get(
             "calendar_public_base_url", settings.get("calendar_public_base_url", "")
@@ -2839,6 +2888,9 @@ def google_connect(driver_id: str) -> Any:
     paths = get_driver_paths(driver_id)
     safe_driver_id = normalize_driver_id(driver_id)
     settings = load_settings(safe_driver_id)
+    calendar_name = request.args.get("google_calendar_name", settings.get("google_calendar_name", "RosterMate")).strip() or "RosterMate"
+    settings["google_calendar_name"] = calendar_name
+    save_driver_settings(safe_driver_id, settings)
     google_status = google_integration_status(settings, safe_driver_id, paths["google_token_path"], request.url_root)
     if not google_status["client_id_valid"]:
         return redirect(
@@ -2885,6 +2937,9 @@ def google_callback(driver_id: str) -> Any:
         flow = create_google_flow(settings, safe_driver_id, request.url_root, state)
         flow.fetch_token(authorization_response=request.url)
         save_google_token(paths["google_token_path"], flow.credentials)
+        calendar_id = ensure_google_calendar(settings, flow.credentials)
+        settings["google_calendar_id"] = calendar_id
+        save_driver_settings(safe_driver_id, settings)
     except Exception as exc:
         return redirect(url_for("settings_page", driver_id=safe_driver_id, notice=f"Google-login fejlede: {exc}", notice_type="error"))
 
@@ -2893,7 +2948,14 @@ def google_callback(driver_id: str) -> Any:
     save_history(history, paths["history_path"])
     session.pop("google_oauth_state", None)
     session.pop("google_oauth_driver_id", None)
-    return redirect(url_for("settings_page", driver_id=safe_driver_id, notice="Google Calendar er nu forbundet", notice_type="success"))
+    return redirect(
+        url_for(
+            "settings_page",
+            driver_id=safe_driver_id,
+            notice=f"Google-kalenderen {settings['google_calendar_name']} er oprettet og forbundet",
+            notice_type="success",
+        )
+    )
 
 
 @app.route("/<driver_id>/google/sync", methods=["POST"])

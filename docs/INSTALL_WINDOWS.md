@@ -93,6 +93,12 @@ Placeringen kan tilsidesættes med miljøvariablen `ROSTERMATE_HOME` på både W
 
 Windows Firewall kan spørge, om Python må modtage trafik. Tillad kun private netværk, medmindre en afgrænset HTTPS-proxy er konfigureret.
 
+## Google Calendar
+
+Brugeren vælger et kalendernavn — `RosterMate` foreslås automatisk — og trykker **Log ind med Google**. Efter godkendelsen opretter appen en separat Google-kalender og gemmer dens ID lokalt under chaufførprofilen.
+
+App-ejeren skal først konfigurere RosterMates fælles OAuth-klient og aktivere Google Calendar API. Client ID og Client Secret kan gemmes lokalt som `GOOGLE_CLIENT_ID` og `GOOGLE_CLIENT_SECRET` eller under avanceret OAuth-opsætning. Hemmeligheder må ikke lægges i GitHub eller releasearkiver. Den registrerede callback-adresse skal svare præcist til den Redirect URI, som RosterMate viser.
+
 ## Automatiske opdateringer
 
 Windows bruger den samme sikre fast-forward-opdatering som macOS. Lokale ændringer i trackede kodefiler bliver ikke overskrevet.
