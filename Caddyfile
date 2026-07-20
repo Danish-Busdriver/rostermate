@@ -1,14 +1,14 @@
 {
-    http_port 8081
-    https_port 8443
+	http_port 8081
+	https_port 8443
 }
 
 kalender.pullen.dk {
-    @calendar path /15831/calendar.ics
+	@calendar path /15831/calendar.ics
 
-    handle @calendar {
-        reverse_proxy 127.0.0.1:8080
-    }
+	handle @calendar {
+		reverse_proxy 127.0.0.1:8080
+	}
 
-    respond 404
+	respond 404
 }
