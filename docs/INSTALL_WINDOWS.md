@@ -10,7 +10,7 @@ Windows-udgaven bruger samme dashboard, SelfService-synkronisering, profiler, hi
 
 ## Anbefalet installation
 
-1. Download `RosterMate-1.6.1-Windows-Setup.exe` fra den seneste GitHub Release.
+1. Download `RosterMate-1.6.2-Windows-Setup.exe` fra den seneste GitHub Release.
 2. Dobbeltklik på installationsfilen.
 3. Vælg eventuelt en skrivebordsgenvej og gennemfør guiden.
 4. Lad installationsprogrammet hente Python, RosterMates afhængigheder og Chromium.
@@ -54,6 +54,8 @@ Logfiler gemmes under:
 ```text
 %LOCALAPPDATA%\RosterMate\logs
 ```
+
+`launcher.log` beskriver hvert starttrin. Hvis starten fejler, bliver kommandovinduet stående og viser denne placering. `rostermate.stderr.log` indeholder eventuelle serverfejl.
 
 ## Første opsætning
 

@@ -95,12 +95,12 @@ def test_windows_distribution_files_are_present():
     assert "python.org/ftp/python" in installer
     assert 'Join-Path $env:LOCALAPPDATA "RosterMate"' in installer
     assert '"RosterMate.lnk"' in installer
-    assert "auto_update.py" in launcher
-    assert 'Invoke-WebRequest -UseBasicParsing -Uri "$AppUrl/health"' in launcher
-    assert "$HealthData.version -eq $ExpectedVersion" in launcher
-    assert "Start-RosterMateTray" in launcher
-    assert 'http://localhost:$Port/wizard/' in launcher
-    assert "port_config.py ensure" in launcher
+    assert "windows_launcher.py" in launcher
+    windows_launcher = (project_root / "windows_launcher.py").read_text(encoding="utf-8")
+    assert "auto_update.py" in windows_launcher
+    assert "ensure_available_port" in windows_launcher
+    assert "start_tray" in windows_launcher
+    assert 'http://localhost:{port}/wizard/' in windows_launcher
 
 
 def test_windows_exe_installer_definition_is_present():
@@ -114,6 +114,8 @@ def test_windows_exe_installer_definition_is_present():
     assert "[UninstallDelete]" in installer
     assert "ISCC.exe" in workflow
     assert "actions/upload-artifact@v4" in workflow
+    assert "Install and launch packaged application" in workflow
+    assert "Tray-ikonprocessen kører ikke" in workflow
     assert "SetupIconFile=" in installer
     assert "RosterMate.ico" in installer
     assert "Afinstaller RosterMate" in installer
