@@ -45,7 +45,13 @@ APP_VERSION = "1.1.0"
 
 
 def is_loopback_request() -> bool:
-    return request.remote_addr in {"127.0.0.1", "::1", None}
+    remote_address = request.remote_addr
+    if remote_address in {"127.0.0.1", "::1", None}:
+        forwarded_address = request.headers.get("X-Forwarded-For", "").split(",", 1)[0].strip()
+        if forwarded_address:
+            return forwarded_address in {"127.0.0.1", "::1"}
+        return True
+    return False
 
 
 @app.before_request
@@ -546,8 +552,11 @@ def local_network_address() -> str:
         connection.close()
 
 
-def calendar_subscription_address(driver_id: str, token: str) -> str:
-    return f"http://{local_network_address()}:8080/{normalize_driver_id(driver_id)}/calendar.ics?token={token}"
+def calendar_subscription_address(driver_id: str, token: str, public_base_url: str = "") -> str:
+    base_url = str(public_base_url or "").strip().rstrip("/")
+    if not base_url:
+        base_url = f"http://{local_network_address()}:8080"
+    return f"{base_url}/{normalize_driver_id(driver_id)}/calendar.ics?token={token}"
 
 
 def valid_google_client_id(value: Any) -> bool:
@@ -1410,7 +1419,11 @@ def index(driver_id: str) -> str:
     ics_ready = paths["ics_path"].exists() and paths["ics_path"].stat().st_size > 0
     google_status = google_integration_status(settings, safe_driver_id, paths["google_token_path"])
     urls = driver_urls(safe_driver_id)
-    calendar_subscription_url = calendar_subscription_address(safe_driver_id, str(settings["calendar_access_token"]))
+    calendar_subscription_url = calendar_subscription_address(
+        safe_driver_id,
+        str(settings["calendar_access_token"]),
+        str(settings.get("calendar_public_base_url") or ""),
+    )
     needs_selfservice_setup = not session_store.has_saved_session()
     show_profile_switcher = len(list_driver_ids()) > 1
 

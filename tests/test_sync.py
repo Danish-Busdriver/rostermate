@@ -75,10 +75,16 @@ def test_lan_access_only_exposes_token_protected_calendar(tmp_path, monkeypatch)
             "/15831/calendar.ics?token=private-token",
             environ_base={"REMOTE_ADDR": "192.168.1.20"},
         )
+        proxied_without_token = client.get(
+            "/15831/calendar.ics",
+            headers={"X-Forwarded-For": "203.0.113.10"},
+            environ_base={"REMOTE_ADDR": "127.0.0.1"},
+        )
 
     assert blocked_dashboard.status_code == 403
     assert blocked_calendar.status_code == 403
     assert calendar.status_code == 200
+    assert proxied_without_token.status_code == 403
 
 
 def test_calendar_subscription_address_can_use_configured_lan_host(monkeypatch):
@@ -87,6 +93,16 @@ def test_calendar_subscription_address_can_use_configured_lan_host(monkeypatch):
     address = app_module.calendar_subscription_address("15831", "private-token")
 
     assert address == "http://192.168.1.42:8080/15831/calendar.ics?token=private-token"
+
+
+def test_calendar_subscription_address_prefers_public_https_url():
+    address = app_module.calendar_subscription_address(
+        "15831",
+        "private-token",
+        "https://kalender.pullen.dk/",
+    )
+
+    assert address == "https://kalender.pullen.dk/15831/calendar.ics?token=private-token"
 
 
 def test_sync_schedule_preserves_events_outside_selected_window(tmp_path):

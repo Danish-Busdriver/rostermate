@@ -31,6 +31,8 @@ Google Calendar kræver en OAuth-klient af typen **Web application**. Aktivér G
 
 Dashboardet viser et personligt kalenderabonnementslink med Mac'ens lokale IP-adresse. Linket kan tilføjes på en iPhone på samme Wi-Fi-netværk. RosterMate lytter på lokalnetværket, men beskytter dashboard, indstillinger og login, så kun den token-beskyttede `.ics`-fil kan hentes fra andre enheder. Den lokale adresse kan om nødvendigt styres med `ROSTERMATE_LAN_HOST`.
 
+En offentlig HTTPS-adresse kan gemmes som `calendar_public_base_url` i chaufførens indstillinger. Den medfølgende `Caddyfile` offentliggør udelukkende `/15831/calendar.ics`; alle andre offentlige stier returnerer 404. Til `kalender.pullen.dk` videresendes ekstern TCP 80 til Mac-port 8081 og ekstern TCP 443 til Mac-port 8443.
+
 Projektet er bygget som en lokal macOS-webapp i Python og Flask, så det kan udvikles og bruges uden at kræve en cloud-løsning. Formålet er at gøre det lettere at:
 
 - importere vagtplaner
