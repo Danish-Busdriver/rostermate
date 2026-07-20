@@ -2697,6 +2697,11 @@ def settings_page(driver_id: str) -> str:
                                     <input id="run_every_minutes" name="run_every_minutes" type="number" min="1" max="10080" value="{{ settings.run_every_minutes }}">
                                 </div>
                                 <label class="row"><input type="checkbox" name="remove_old_shifts" value="true" {% if settings.remove_old_shifts %}checked{% endif %}> Fjern gamle vagter ved sync</label>
+                                <div class="field">
+                                    <label for="calendar_public_base_url">Offentlig kalenderadresse</label>
+                                    <input id="calendar_public_base_url" name="calendar_public_base_url" value="{{ settings.calendar_public_base_url or '' }}" placeholder="https://kalender.example.dk">
+                                    <div class="field-hint">Lad feltet være tomt for kun at bruge kalenderen på lokalnetværket.</div>
+                                </div>
                             </div>
                             <div class="section span-2">
                                 <h2>Google Calendar</h2>
@@ -2783,6 +2788,9 @@ def settings_route(driver_id: str) -> tuple[Any, int]:
         "google_client_secret": request.form.get("google_client_secret", settings.get("google_client_secret", "")).strip(),
         "google_calendar_id": request.form.get("google_calendar_id", settings.get("google_calendar_id", "primary")).strip() or "primary",
         "google_redirect_uri": request.form.get("google_redirect_uri", settings.get("google_redirect_uri", "")).strip(),
+        "calendar_public_base_url": request.form.get(
+            "calendar_public_base_url", settings.get("calendar_public_base_url", "")
+        ).strip().rstrip("/"),
     }
     save_driver_settings(safe_driver_id, updated_settings)
     return jsonify({"status": "ok", "message": "Indstillinger gemt", "employment_type": employment_type})

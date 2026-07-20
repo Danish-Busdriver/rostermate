@@ -105,6 +105,22 @@ def test_calendar_subscription_address_prefers_public_https_url():
     assert address == "https://kalender.pullen.dk/15831/calendar.ics?token=private-token"
 
 
+def test_settings_save_public_calendar_address(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
+    monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
+    app_module.app.config["TESTING"] = True
+
+    with app_module.app.test_client() as client:
+        response = client.post(
+            "/15831/settings",
+            data={"calendar_public_base_url": "https://kalender.pullen.dk/"},
+        )
+
+    assert response.status_code == 200
+    assert app_module.load_settings("15831")["calendar_public_base_url"] == "https://kalender.pullen.dk"
+
+
 def test_sync_schedule_preserves_events_outside_selected_window(tmp_path):
     existing_events = [
         {
