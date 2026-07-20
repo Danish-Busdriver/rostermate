@@ -117,7 +117,9 @@ def test_macos_app_bootstraps_first_install_and_checks_version():
     assert "EXPECTED_VERSION=" in launcher
     assert 'curl -fsS "http://127.0.0.1:8080/health"' in launcher
     assert "Første installation kan tage et par minutter" in launcher
-    assert "tray.py" in launcher
+    run_script = (project_root / "run.command").read_text(encoding="utf-8")
+    assert 'python3 tray.py --server-pid "$server_pid"' in run_script
+    assert 'wait "$server_pid"' in launcher
 
 
 def test_shared_tray_uses_the_rostermate_logo_and_expected_actions():
