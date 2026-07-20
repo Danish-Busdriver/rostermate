@@ -44,6 +44,7 @@ Dette er et tidligt, men solidt fundament til en senere macOS-app med flere funk
 - Kalenderlinket følger den aktive chaufførprofil, f.eks. `/15831/calendar.ics`
 - Guidet førstegangsopsætning og separate chaufførprofiler
 - SelfService-login med lokalt gemt browsersession
+- SelfService-login håndterer Tide/SSO-viderestillinger uden at afbryde forbindelsen, mens siden navigerer
 - Google Kalender-integration og ICS-eksport
 - Import af planer via JSON
 - Sammenligning af gamle og nye planer

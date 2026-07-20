@@ -10,6 +10,27 @@ from typing import Any
 from session import SelfServiceSessionStore
 
 
+TRANSIENT_NAVIGATION_ERRORS = (
+    "navigating and changing the content",
+    "execution context was destroyed",
+)
+
+
+def read_stable_page_content(page: Any, attempts: int = 8) -> str | None:
+    """Read page HTML without failing while an SSO redirect is in progress."""
+    for _ in range(max(1, attempts)):
+        try:
+            return page.content()
+        except Exception as exc:
+            if not any(message in str(exc).lower() for message in TRANSIENT_NAVIGATION_ERRORS):
+                raise
+            try:
+                page.wait_for_load_state("domcontentloaded", timeout=3000)
+            except Exception:
+                page.wait_for_timeout(250)
+    return None
+
+
 @dataclass
 class LoginFlowState:
     flow_id: str
@@ -73,7 +94,9 @@ class SelfServiceLoginManager:
                 page = context.new_page()
                 page.set_default_timeout(20000)
                 page.goto(login_url, wait_until="load")
-                html = page.content()
+                html = read_stable_page_content(page)
+                if html is None:
+                    return False, "SelfService navigerer stadig. Vent et øjeblik og test forbindelsen igen."
                 logged_in = (
                     "Username" not in html
                     and "Password" not in html
@@ -113,7 +136,10 @@ class SelfServiceLoginManager:
 
                 deadline = time.time() + 900
                 while time.time() < deadline:
-                    current_html = page.content()
+                    current_html = read_stable_page_content(page)
+                    if current_html is None:
+                        page.wait_for_timeout(500)
+                        continue
                     logged_in = (
                         "Username" not in current_html
                         and "Password" not in current_html
