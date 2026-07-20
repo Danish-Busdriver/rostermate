@@ -5,7 +5,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app as app_module
 import launch_agent as launch_agent_module
-from login import launch_authenticated_context, read_stable_page_content
+from login import launch_authenticated_context, read_stable_page_content, restore_session_storage, save_session_storage
 from session import SelfServiceSessionStore
 
 
@@ -58,10 +58,16 @@ def test_read_stable_page_content_reraises_non_navigation_errors():
 def test_launch_authenticated_context_reuses_persistent_driver_profile(tmp_path):
     calls: list[tuple[str, object]] = []
 
+    class Context:
+        def add_init_script(self, **kwargs):
+            calls.append(("init-script", kwargs))
+
+    context = Context()
+
     class Chromium:
         def launch_persistent_context(self, **kwargs):
             calls.append(("persistent", kwargs))
-            return "persistent-context"
+            return context
 
         def launch(self, **kwargs):
             calls.append(("browser", kwargs))
@@ -76,8 +82,42 @@ def test_launch_authenticated_context_reuses_persistent_driver_profile(tmp_path)
     browser, context = launch_authenticated_context(Playwright(), store, headless=True)
 
     assert browser is None
-    assert context == "persistent-context"
+    assert context is not None
     assert calls == [("persistent", {"user_data_dir": str(store.user_data_dir), "headless": True})]
+
+
+def test_session_storage_is_saved_and_restored(tmp_path):
+    store = SelfServiceSessionStore("15831", tmp_path / "state.json", tmp_path / "profile")
+
+    class Page:
+        def evaluate(self, _script):
+            return {"origin": "https://selfservice.example", "items": {"auth": "token"}}
+
+    scripts: list[str] = []
+
+    class Context:
+        def add_init_script(self, *, script):
+            scripts.append(script)
+
+    save_session_storage(Page(), store)
+    restore_session_storage(Context(), store)
+
+    saved = store.session_storage_state_path.read_text(encoding="utf-8")
+    assert '"auth": "token"' in saved
+    assert len(scripts) == 1
+    assert "window.sessionStorage.setItem" in scripts[0]
+    assert "https://selfservice.example" in scripts[0]
+
+
+def test_clear_removes_session_storage_state(tmp_path):
+    store = SelfServiceSessionStore("15831", tmp_path / "state.json", tmp_path / "profile")
+    store.storage_state_path.write_text("{}", encoding="utf-8")
+    store.session_storage_state_path.write_text("{}", encoding="utf-8")
+
+    store.clear()
+
+    assert not store.storage_state_path.exists()
+    assert not store.session_storage_state_path.exists()
 
 
 def test_wizard_test_connection_route_returns_error_without_session(tmp_path, monkeypatch):
