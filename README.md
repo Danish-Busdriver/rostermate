@@ -40,6 +40,8 @@ Dette er et tidligt, men solidt fundament til en senere macOS-app med flere funk
 
 - Dashboard til visning af importerede vagter
 - Dashboardets liste “De næste 7 kalenderposter” viser kun poster fra dags dato og frem, sorteret efter dato og starttid
+- Dashboardet viser softwareversion, Git-commit og datoen for seneste softwareopdatering
+- Kalenderlinket følger den aktive chaufførprofil, f.eks. `/15831/calendar.ics`
 - Guidet førstegangsopsætning og separate chaufførprofiler
 - SelfService-login med lokalt gemt browsersession
 - Google Kalender-integration og ICS-eksport

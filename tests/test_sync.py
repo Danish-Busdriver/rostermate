@@ -5,7 +5,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app as app_module
-from app import build_event_from_shift, select_next_calendar_events, sync_schedule
+from app import build_event_from_shift, select_next_calendar_events, software_info, sync_schedule
 
 
 def test_build_event_from_shift_handles_regular_and_all_day_shifts():
@@ -145,6 +145,14 @@ def test_select_next_calendar_events_sorts_same_day_by_start_time():
     selected = select_next_calendar_events(events, today=app_module.date(2026, 7, 20))
 
     assert [event["id"] for event in selected] == ["early", "late"]
+
+
+def test_software_info_exposes_version_and_survives_missing_git(tmp_path):
+    info = software_info(tmp_path)
+
+    assert info["version"] == app_module.APP_VERSION
+    assert info["commit"] == "ukendt"
+    assert info["updated_at"] == "ukendt"
 
 
 def test_settings_route_persists_selfservice_credentials(tmp_path, monkeypatch):

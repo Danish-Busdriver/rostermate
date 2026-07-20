@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import hashlib
+import subprocess
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -37,7 +38,7 @@ GOOGLE_TOKEN_PATH = DATA_DIR / "google_token.json"
 GOOGLE_SYNC_STATE_PATH = DATA_DIR / "google_sync_state.json"
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar"]
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 
 
 def normalize_driver_id(value: str) -> str:
@@ -45,6 +46,34 @@ def normalize_driver_id(value: str) -> str:
     if not re.fullmatch(r"\d{1,12}", driver_id):
         raise ValueError("Ugyldigt chaufførnummer")
     return driver_id
+
+
+def software_info(project_dir: Path | None = None) -> dict[str, str]:
+    root = project_dir or BASE_DIR
+    commit = "ukendt"
+    updated_at = "ukendt"
+    try:
+        commit_result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        date_result = subprocess.run(
+            ["git", "log", "-1", "--format=%cI"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if commit_result.returncode == 0 and commit_result.stdout.strip():
+            commit = commit_result.stdout.strip()
+        if date_result.returncode == 0 and date_result.stdout.strip():
+            updated_at = format_timestamp(date_result.stdout.strip())
+    except OSError:
+        pass
+    return {"version": APP_VERSION, "commit": commit, "updated_at": updated_at}
 
 
 def driver_storage_paths(driver_id: str) -> dict[str, Path]:
@@ -1252,6 +1281,7 @@ def index(driver_id: str) -> str:
     ics_ready = paths["ics_path"].exists() and paths["ics_path"].stat().st_size > 0
     google_status = google_integration_status(settings, safe_driver_id, paths["google_token_path"])
     urls = driver_urls(safe_driver_id)
+    calendar_subscription_url = f"{request.url_root.rstrip('/')}{urls['calendar_url']}"
     needs_selfservice_setup = not session_store.has_saved_session()
 
     return render_template_string(
@@ -1999,6 +2029,7 @@ def index(driver_id: str) -> str:
                                     <strong>ICS eksport</strong>
                                     <div class="small">{{ 'Kalenderfilen er klar til brug.' if ics_ready else 'Kalenderfilen oprettes efter første sync.' }}</div>
                                     <div style="margin-top:0.8rem;"><a class="button-link ghost" href="{{ urls.calendar_url }}">Åbn fil</a></div>
+                                    <div class="small" style="margin-top:0.7rem; overflow-wrap:anywhere;">{{ calendar_subscription_url }}</div>
                                 </div>
                                 <div class="quick-card">
                                     <strong>Google Calendar</strong>
@@ -2008,6 +2039,9 @@ def index(driver_id: str) -> str:
                             </div>
                         </div>
                     </div>
+                </div>
+                <div class="small" style="margin-top:1rem; text-align:center;">
+                    RosterMate {{ software.version }} · commit {{ software.commit }} · software opdateret {{ software.updated_at }}
                 </div>
             </div>
         </body>
@@ -2029,6 +2063,8 @@ def index(driver_id: str) -> str:
         ics_ready=ics_ready,
         google_status=google_status,
         urls=urls,
+        calendar_subscription_url=calendar_subscription_url,
+        software=software_info(),
         needs_selfservice_setup=needs_selfservice_setup,
     )
 
