@@ -43,7 +43,8 @@ for _ in $(seq 1 60); do
   health="$(curl -fsS "http://127.0.0.1:8080/health" 2>/dev/null || true)"
   if printf '%s' "$health" | grep -q "\"version\":\"$EXPECTED_VERSION\""; then
     open "http://127.0.0.1:8080" >/dev/null 2>&1 || true
-    exec "$APP_ROOT/.venv/bin/python3" "$APP_ROOT/tray.py" --server-pid "$server_pid"
+    wait "$server_pid" 2>/dev/null || true
+    exit 0
   fi
   sleep 1
 done

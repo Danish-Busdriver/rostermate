@@ -11,4 +11,8 @@ fi
 
 source .venv/bin/activate
 python3 auto_update.py
-python3 app.py
+python3 app.py &
+server_pid=$!
+
+python3 tray.py --server-pid "$server_pid"
+wait "$server_pid" 2>/dev/null || true
