@@ -31,6 +31,27 @@ def read_stable_page_content(page: Any, attempts: int = 8) -> str | None:
     return None
 
 
+def launch_authenticated_context(
+    playwright: Any,
+    session_store: SelfServiceSessionStore,
+    *,
+    headless: bool,
+) -> tuple[Any | None, Any]:
+    """Reuse the persistent driver profile that completed the interactive login."""
+    if session_store.user_data_dir.exists():
+        context = playwright.chromium.launch_persistent_context(
+            user_data_dir=str(session_store.user_data_dir),
+            headless=headless,
+        )
+        return None, context
+
+    browser = playwright.chromium.launch(headless=headless)
+    context_options: dict[str, Any] = {}
+    if session_store.has_saved_session():
+        context_options["storage_state"] = str(session_store.storage_state_path)
+    return browser, browser.new_context(**context_options)
+
+
 @dataclass
 class LoginFlowState:
     flow_id: str
@@ -89,8 +110,7 @@ class SelfServiceLoginManager:
         context = None
         try:
             with sync_playwright() as playwright:
-                browser = playwright.chromium.launch(headless=True)
-                context = browser.new_context(storage_state=str(session_store.storage_state_path))
+                browser, context = launch_authenticated_context(playwright, session_store, headless=True)
                 page = context.new_page()
                 page.set_default_timeout(20000)
                 page.goto(login_url, wait_until="load")
@@ -103,7 +123,8 @@ class SelfServiceLoginManager:
                     and ("Assignments" in page.url or "Arbejdskalender" in html)
                 )
                 context.close()
-                browser.close()
+                if browser is not None:
+                    browser.close()
                 if logged_in:
                     return True, "Forbindelsen virker. SelfService-sessionen er stadig gyldig."
                 return False, "SelfService-sessionen ser ud til at være udløbet. Log ind igen via wizard-guiden."
@@ -146,9 +167,10 @@ class SelfServiceLoginManager:
                         and ("Assignments" in page.url or "Arbejdskalender" in current_html)
                     )
                     if logged_in:
-                        context.storage_state(path=str(session_store.storage_state_path))
-                        self.update(flow_id, state="connected", message="Forbundet til SelfService")
+                        context.storage_state(path=str(session_store.storage_state_path), indexed_db=True)
                         context.close()
+                        context = None
+                        self.update(flow_id, state="connected", message="Forbundet til SelfService")
                         return
                     page.wait_for_timeout(1000)
 
