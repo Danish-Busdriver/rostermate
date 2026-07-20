@@ -10,3 +10,4 @@ coverage/
 data/
 backups/
 output/
+Caddyfile.local

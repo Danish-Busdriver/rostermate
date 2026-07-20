@@ -62,21 +62,21 @@ def test_lan_access_only_exposes_token_protected_calendar(tmp_path, monkeypatch)
     monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
     monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
-    paths = app_module.ensure_storage("15831")
+    paths = app_module.ensure_storage("12345")
     assert paths is not None
-    app_module.save_driver_settings("15831", {"calendar_access_token": "private-token", "wizard_completed": True})
+    app_module.save_driver_settings("12345", {"calendar_access_token": "private-token", "wizard_completed": True})
     paths["ics_path"].write_text("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", encoding="utf-8")
 
     app_module.app.config["TESTING"] = True
     with app_module.app.test_client() as client:
-        blocked_dashboard = client.get("/15831/", environ_base={"REMOTE_ADDR": "192.168.1.20"})
-        blocked_calendar = client.get("/15831/calendar.ics", environ_base={"REMOTE_ADDR": "192.168.1.20"})
+        blocked_dashboard = client.get("/12345/", environ_base={"REMOTE_ADDR": "192.168.1.20"})
+        blocked_calendar = client.get("/12345/calendar.ics", environ_base={"REMOTE_ADDR": "192.168.1.20"})
         calendar = client.get(
-            "/15831/calendar.ics?token=private-token",
+            "/12345/calendar.ics?token=private-token",
             environ_base={"REMOTE_ADDR": "192.168.1.20"},
         )
         proxied_without_token = client.get(
-            "/15831/calendar.ics",
+            "/12345/calendar.ics",
             headers={"X-Forwarded-For": "203.0.113.10"},
             environ_base={"REMOTE_ADDR": "127.0.0.1"},
         )
@@ -90,19 +90,19 @@ def test_lan_access_only_exposes_token_protected_calendar(tmp_path, monkeypatch)
 def test_calendar_subscription_address_can_use_configured_lan_host(monkeypatch):
     monkeypatch.setenv("ROSTERMATE_LAN_HOST", "192.168.1.42")
 
-    address = app_module.calendar_subscription_address("15831", "private-token")
+    address = app_module.calendar_subscription_address("12345", "private-token")
 
-    assert address == "http://192.168.1.42:8080/15831/calendar.ics?token=private-token"
+    assert address == "http://192.168.1.42:8080/12345/calendar.ics?token=private-token"
 
 
 def test_calendar_subscription_address_prefers_public_https_url():
     address = app_module.calendar_subscription_address(
-        "15831",
+        "12345",
         "private-token",
-        "https://kalender.pullen.dk/",
+        "https://calendar.example.dk/",
     )
 
-    assert address == "https://kalender.pullen.dk/15831/calendar.ics?token=private-token"
+    assert address == "https://calendar.example.dk/12345/calendar.ics?token=private-token"
 
 
 def test_settings_save_public_calendar_address(tmp_path, monkeypatch):
@@ -113,12 +113,12 @@ def test_settings_save_public_calendar_address(tmp_path, monkeypatch):
 
     with app_module.app.test_client() as client:
         response = client.post(
-            "/15831/settings",
-            data={"calendar_public_base_url": "https://kalender.pullen.dk/"},
+            "/12345/settings",
+            data={"calendar_public_base_url": "https://calendar.example.dk/"},
         )
 
     assert response.status_code == 200
-    assert app_module.load_settings("15831")["calendar_public_base_url"] == "https://kalender.pullen.dk"
+    assert app_module.load_settings("12345")["calendar_public_base_url"] == "https://calendar.example.dk"
 
 
 def test_sync_schedule_preserves_events_outside_selected_window(tmp_path):
@@ -259,14 +259,14 @@ def test_software_info_exposes_version_and_survives_missing_git(tmp_path):
 
 def test_list_driver_ids_only_returns_configured_numeric_profiles(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "DATA_DIR", tmp_path)
-    (tmp_path / "15831").mkdir()
-    (tmp_path / "15831" / "settings.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "12345").mkdir()
+    (tmp_path / "12345" / "settings.json").write_text("{}", encoding="utf-8")
     (tmp_path / "empty").mkdir()
     (tmp_path / "empty" / "settings.json").write_text("{}", encoding="utf-8")
     (tmp_path / "999").mkdir()
     (tmp_path / "999" / "settings.json").touch()
 
-    assert list_driver_ids() == ["15831"]
+    assert list_driver_ids() == ["12345"]
 
 
 def test_fetch_status_distinguishes_errors_from_empty_schedule():
@@ -284,7 +284,7 @@ def test_initial_sync_does_not_report_old_events_as_new_when_fetch_fails(tmp_pat
 
     try:
         run_initial_sync(
-            "15831",
+            "12345",
             {"days_ahead": 7},
             paths,
             lambda _days, _driver: ([], "SelfService-sessionen er udløbet"),

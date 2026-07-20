@@ -3,8 +3,8 @@
 	https_port 8443
 }
 
-kalender.pullen.dk {
-	@calendar path /15831/calendar.ics
+calendar.example.dk {
+	@calendar path /12345/calendar.ics
 
 	handle @calendar {
 		reverse_proxy 127.0.0.1:8080

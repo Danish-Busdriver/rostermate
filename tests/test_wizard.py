@@ -76,7 +76,7 @@ def test_launch_authenticated_context_reuses_persistent_driver_profile(tmp_path)
     class Playwright:
         chromium = Chromium()
 
-    store = SelfServiceSessionStore("15831", tmp_path / "state.json", tmp_path / "profile")
+    store = SelfServiceSessionStore("12345", tmp_path / "state.json", tmp_path / "profile")
     store.user_data_dir.mkdir()
 
     browser, context = launch_authenticated_context(Playwright(), store, headless=True)
@@ -87,7 +87,7 @@ def test_launch_authenticated_context_reuses_persistent_driver_profile(tmp_path)
 
 
 def test_session_storage_is_saved_and_restored(tmp_path):
-    store = SelfServiceSessionStore("15831", tmp_path / "state.json", tmp_path / "profile")
+    store = SelfServiceSessionStore("12345", tmp_path / "state.json", tmp_path / "profile")
 
     class Page:
         def evaluate(self, _script):
@@ -110,7 +110,7 @@ def test_session_storage_is_saved_and_restored(tmp_path):
 
 
 def test_clear_removes_session_storage_state(tmp_path):
-    store = SelfServiceSessionStore("15831", tmp_path / "state.json", tmp_path / "profile")
+    store = SelfServiceSessionStore("12345", tmp_path / "state.json", tmp_path / "profile")
     store.storage_state_path.write_text("{}", encoding="utf-8")
     store.session_storage_state_path.write_text("{}", encoding="utf-8")
 
@@ -139,7 +139,7 @@ def test_home_redirects_to_the_only_configured_profile(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
     monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
-    profile_dir = app_module.DATA_DIR / "15831"
+    profile_dir = app_module.DATA_DIR / "12345"
     profile_dir.mkdir(parents=True)
     (profile_dir / "settings.json").write_text('{"wizard_completed": false}', encoding="utf-8")
 
@@ -149,7 +149,7 @@ def test_home_redirects_to_the_only_configured_profile(tmp_path, monkeypatch):
         chooser = client.get("/?choose=1")
 
     assert response.status_code == 302
-    assert response.headers["Location"].endswith("/15831/wizard")
+    assert response.headers["Location"].endswith("/12345/wizard")
     assert chooser.status_code == 200
     assert b"Tilf\xc3\xb8j profil" in chooser.data
 
