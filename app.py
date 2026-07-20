@@ -58,7 +58,7 @@ GOOGLE_TOKEN_PATH = DATA_DIR / "google_token.json"
 GOOGLE_SYNC_STATE_PATH = DATA_DIR / "google_sync_state.json"
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar"]
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.4.1"
 
 
 def is_loopback_request() -> bool:
@@ -3279,7 +3279,7 @@ def backup(driver_id: str) -> tuple[Any, int]:
 @app.route("/health")
 def health() -> tuple[Any, int]:
     ensure_storage()
-    return jsonify({"status": "ok"}), 200
+    return jsonify({"status": "ok", "version": APP_VERSION}), 200
 
 
 if __name__ == "__main__":

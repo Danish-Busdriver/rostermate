@@ -11,7 +11,11 @@ Denne guide indeholder installation, opdatering og teknisk drift af RosterMate p
 
 ## Anbefalet installation
 
-Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.4.0-macOS.zip`, pak filen ud, og fortsæt med installationen nedenfor.
+Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.4.1-macOS.zip`, og pak filen ud.
+
+Dobbeltklik derefter på `RosterMate.app`. Ved første start klargør appen selv Python-miljøet og browserkomponenten. Når den korrekte RosterMate-version svarer, åbnes opsætningsguiden automatisk. Første start kan tage et par minutter.
+
+Terminalinstallation er et alternativ:
 
 Åbn Terminal og kør:
 
@@ -35,7 +39,7 @@ Følg opsætningsguiden i browseren for at oprette en chaufførprofil og forbind
 
 ## Start via macOS-app
 
-Repositoryet indeholder `RosterMate.app`. App-bundlen starter den lokale RosterMate-installation og åbner brugerfladen i browseren. macOS kan ved første start bede om tilladelse til at åbne en app fra en ukendt udvikler.
+Repositoryet indeholder `RosterMate.app`. App-bundlen installerer manglende komponenter, stopper en eventuel forældet RosterMate-proces på port 8080 og åbner først brugerfladen, når den aktuelle version har bestået sit health-check. En installation uden profiler sendes derfor direkte til opsætningsguiden. macOS kan ved første start bede om tilladelse til at åbne en app fra en ukendt udvikler.
 
 Projektet er endnu ikke distribueret som en signeret eller notariseret `.pkg`-installation.
 
@@ -120,7 +124,7 @@ Kontrollér serveren:
 curl http://127.0.0.1:8080/health
 ```
 
-Et gyldigt svar indeholder `"status":"ok"`.
+Et gyldigt svar indeholder `"status":"ok"` og den installerede `"version"`.
 
 ## Lokale data
 

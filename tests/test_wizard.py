@@ -9,6 +9,16 @@ from login import launch_authenticated_context, read_stable_page_content, restor
 from session import SelfServiceSessionStore
 
 
+def test_health_reports_current_app_version():
+    app_module.app.config["TESTING"] = True
+
+    with app_module.app.test_client() as client:
+        response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.get_json() == {"status": "ok", "version": app_module.APP_VERSION}
+
+
 class NavigatingPage:
     def __init__(self, failures: int) -> None:
         self.failures = failures

@@ -89,6 +89,7 @@ def test_windows_distribution_files_are_present():
     assert '"RosterMate.lnk"' in installer
     assert "auto_update.py" in launcher
     assert 'Invoke-WebRequest -UseBasicParsing -Uri "$AppUrl/health"' in launcher
+    assert "$HealthData.version -eq $ExpectedVersion" in launcher
 
 
 def test_windows_exe_installer_definition_is_present():
@@ -102,3 +103,13 @@ def test_windows_exe_installer_definition_is_present():
     assert "[UninstallDelete]" in installer
     assert "ISCC.exe" in workflow
     assert "actions/upload-artifact@v4" in workflow
+
+
+def test_macos_app_bootstraps_first_install_and_checks_version():
+    project_root = Path(__file__).resolve().parents[1]
+    launcher = (project_root / "RosterMate.app" / "Contents" / "MacOS" / "RosterMate").read_text(encoding="utf-8")
+
+    assert "./install.command" in launcher
+    assert "EXPECTED_VERSION=" in launcher
+    assert 'curl -fsS "http://127.0.0.1:8080/health"' in launcher
+    assert "Første installation kan tage et par minutter" in launcher

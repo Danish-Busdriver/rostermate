@@ -6,6 +6,19 @@ APP_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 LOG_FILE="$HOME/Library/Logs/RosterMate.log"
 mkdir -p "$(dirname "$LOG_FILE")"
 
+if [ ! -x "$APP_ROOT/.venv/bin/python3" ]; then
+  osascript -e 'display notification "Første installation kan tage et par minutter" with title "RosterMate installerer"' >/dev/null 2>&1 || true
+  if ! (
+    cd "$APP_ROOT"
+    ./install.command >>"$LOG_FILE" 2>&1
+  ); then
+    osascript -e 'display alert "RosterMate kunne ikke installeres" message "Kontrollér at Python 3.12 eller nyere er installeret. Se loggen i Bibliotek/Logs/RosterMate.log." as critical' >/dev/null 2>&1 || true
+    exit 1
+  fi
+fi
+
+EXPECTED_VERSION="$(cd "$APP_ROOT" && .venv/bin/python3 -c 'import app; print(app.APP_VERSION)')"
+
 if command -v lsof >/dev/null 2>&1; then
   pids="$(lsof -ti tcp:8080 2>/dev/null || true)"
   if [ -n "$pids" ]; then
@@ -18,6 +31,14 @@ fi
   ./run.command >"$LOG_FILE" 2>&1
 ) &
 
-sleep 2
-open "http://127.0.0.1:8080" >/dev/null 2>&1 || true
-exit 0
+for _ in $(seq 1 60); do
+  health="$(curl -fsS "http://127.0.0.1:8080/health" 2>/dev/null || true)"
+  if printf '%s' "$health" | grep -q "\"version\":\"$EXPECTED_VERSION\""; then
+    open "http://127.0.0.1:8080" >/dev/null 2>&1 || true
+    exit 0
+  fi
+  sleep 1
+done
+
+osascript -e 'display alert "RosterMate kunne ikke starte" message "Den korrekte version svarede ikke på port 8080. Se loggen i Bibliotek/Logs/RosterMate.log." as critical' >/dev/null 2>&1 || true
+exit 1
