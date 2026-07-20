@@ -10,6 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-blue" alt="macOS">
+  <img src="https://img.shields.io/badge/Windows-beta-0078D4" alt="Windows beta">
   <img src="https://img.shields.io/badge/status-aktiv%20udvikling-orange" alt="Aktiv udvikling">
   <img src="https://img.shields.io/badge/license-MIT-red" alt="MIT license">
 </p>
@@ -32,6 +33,7 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 - Holde flere chaufførprofiler adskilt
 - Opdatere softwaren automatisk fra den stabile GitHub-version
 - Opbevare SelfService-session og kalenderdata lokalt
+- Køre den samme GUI og synkroniseringsmotor på macOS og Windows
 
 ## Sådan virker det
 
@@ -67,6 +69,7 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 - [x] Historik, ændringsregistrering og backup
 - [x] Separate chaufførprofiler
 - [x] Automatiske softwareopdateringer
+- [x] Windows-beta med installation, start og autostart
 
 ### Næste versioner
 
@@ -75,18 +78,21 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 - [ ] Notifikationer ved ændrede vagter
 - [ ] Forbedret release- og backupflow
 - [ ] Signeret macOS-installationspakke
+- [ ] Signeret Windows-installationspakke
 
 ### På længere sigt
 
-- [ ] Windows-version
+- [ ] Native menu-/bakkeapp til både macOS og Windows
 - [ ] Mere fleksibel kalenderdeling uden krav om en tændt hjemmecomputer
 - [ ] Flere SelfService-varianter og arbejdspladser
 - [ ] Mobilvenlig status- og opsætningsside
 
 ## Installation
 
-- [Installation på macOS](docs/INSTALL_MACOS.md)
-- [Planlagt installation på Windows](docs/INSTALL_WINDOWS.md)
+- [Download RosterMate til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.2.0-macOS.zip)
+- [Download RosterMate til Windows (beta)](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.2.0-Windows.zip)
+
+Har du brug for hjælp, finder du de separate vejledninger til [macOS](docs/INSTALL_MACOS.md) og [Windows](docs/INSTALL_WINDOWS.md).
 
 ## Projektet
 

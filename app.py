@@ -8,6 +8,7 @@ import socket
 import shutil
 import hashlib
 import subprocess
+import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -27,9 +28,25 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "rostermate-dev-secret-change-me")
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data"
-BACKUP_DIR = BASE_DIR / "backups"
-OUTPUT_DIR = BASE_DIR / "output"
+
+
+def default_storage_root(platform_name: str | None = None) -> Path:
+    configured_root = os.environ.get("ROSTERMATE_HOME", "").strip()
+    if configured_root:
+        return Path(configured_root).expanduser()
+    active_platform = platform_name or sys.platform
+    if active_platform == "win32":
+        local_app_data = os.environ.get("LOCALAPPDATA", "").strip()
+        if local_app_data:
+            return Path(local_app_data) / "RosterMate"
+        return Path.home() / "AppData" / "Local" / "RosterMate"
+    return BASE_DIR
+
+
+STORAGE_ROOT = default_storage_root()
+DATA_DIR = STORAGE_ROOT / "data"
+BACKUP_DIR = STORAGE_ROOT / "backups"
+OUTPUT_DIR = STORAGE_ROOT / "output"
 HISTORY_PATH = DATA_DIR / "history.json"
 PLAN_PATH = DATA_DIR / "plan.json"
 SETTINGS_PATH = DATA_DIR / "settings.json"
@@ -41,7 +58,7 @@ GOOGLE_TOKEN_PATH = DATA_DIR / "google_token.json"
 GOOGLE_SYNC_STATE_PATH = DATA_DIR / "google_sync_state.json"
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar"]
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 
 
 def is_loopback_request() -> bool:
