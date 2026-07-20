@@ -29,6 +29,8 @@ Kalenderfilen eksporterer tidsbestemte vagter som RFC 5545-kompatible UTC-tidspu
 
 Google Calendar kræver en OAuth-klient af typen **Web application**. Aktivér Google Calendar API, konfigurér OAuth-samtykkeskærmen, og registrér den redirect-URI, som vises i RosterMate. Det fulde Client ID slutter med `.apps.googleusercontent.com`; RosterMate afviser ugyldige ID'er lokalt, før Google-login åbnes.
 
+Dashboardet viser et personligt kalenderabonnementslink med Mac'ens lokale IP-adresse. Linket kan tilføjes på en iPhone på samme Wi-Fi-netværk. RosterMate lytter på lokalnetværket, men beskytter dashboard, indstillinger og login, så kun den token-beskyttede `.ics`-fil kan hentes fra andre enheder. Den lokale adresse kan om nødvendigt styres med `ROSTERMATE_LAN_HOST`.
+
 Projektet er bygget som en lokal macOS-webapp i Python og Flask, så det kan udvikles og bruges uden at kræve en cloud-løsning. Formålet er at gøre det lettere at:
 
 - importere vagtplaner

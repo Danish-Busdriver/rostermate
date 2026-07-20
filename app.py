@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
+import socket
 import shutil
 import hashlib
 import subprocess
@@ -40,6 +42,23 @@ GOOGLE_SYNC_STATE_PATH = DATA_DIR / "google_sync_state.json"
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar"]
 LOCAL_TIMEZONE = "Europe/Copenhagen"
 APP_VERSION = "1.1.0"
+
+
+def is_loopback_request() -> bool:
+    return request.remote_addr in {"127.0.0.1", "::1", None}
+
+
+@app.before_request
+def protect_lan_routes() -> Any:
+    if is_loopback_request():
+        return None
+    if request.endpoint == "calendar_file" and request.view_args:
+        driver_id = normalize_driver_id(str(request.view_args.get("driver_id", "")))
+        expected_token = str(load_settings(driver_id).get("calendar_access_token") or "")
+        supplied_token = str(request.args.get("token") or "")
+        if expected_token and secrets.compare_digest(expected_token, supplied_token):
+            return None
+    return jsonify({"status": "error", "message": "Kun kalenderlinket er tilgængeligt på lokalnetværket"}), 403
 
 
 def normalize_driver_id(value: str) -> str:
@@ -510,6 +529,25 @@ def google_redirect_uri(settings: dict[str, Any], driver_id: str, base_url: str 
     if base_url:
         return f"{base_url.rstrip('/')}/{normalize_driver_id(driver_id)}/google/callback"
     return f"http://127.0.0.1:8080/{normalize_driver_id(driver_id)}/google/callback"
+
+
+def local_network_address() -> str:
+    override = os.environ.get("ROSTERMATE_LAN_HOST", "").strip()
+    if override:
+        return override
+    connection = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        connection.connect(("192.0.2.1", 80))
+        return str(connection.getsockname()[0])
+    except OSError:
+        hostname = socket.gethostname().split(".")[0]
+        return f"{hostname}.local"
+    finally:
+        connection.close()
+
+
+def calendar_subscription_address(driver_id: str, token: str) -> str:
+    return f"http://{local_network_address()}:8080/{normalize_driver_id(driver_id)}/calendar.ics?token={token}"
 
 
 def valid_google_client_id(value: Any) -> bool:
@@ -1210,6 +1248,9 @@ def wizard_page(driver_id: str) -> str:
     safe_driver_id = normalize_driver_id(driver_id)
     session["last_driver_id"] = safe_driver_id
     settings = load_settings(safe_driver_id)
+    if not settings.get("calendar_access_token"):
+        settings = {**settings, "calendar_access_token": secrets.token_urlsafe(24)}
+        save_driver_settings(safe_driver_id, settings)
     history = load_history(paths["history_path"])
     session_store = SelfServiceSessionStore.from_paths(safe_driver_id, paths)
     urls = driver_urls(safe_driver_id)
@@ -1352,6 +1393,9 @@ def index(driver_id: str) -> str:
     safe_driver_id = normalize_driver_id(driver_id)
     session["last_driver_id"] = safe_driver_id
     settings = load_settings(safe_driver_id)
+    if not settings.get("calendar_access_token"):
+        settings = {**settings, "calendar_access_token": secrets.token_urlsafe(24)}
+        save_driver_settings(safe_driver_id, settings)
     session_store = SelfServiceSessionStore.from_paths(safe_driver_id, paths)
     if should_show_first_run(settings, session_store):
         return redirect(url_for("wizard_page", driver_id=safe_driver_id))
@@ -1366,7 +1410,7 @@ def index(driver_id: str) -> str:
     ics_ready = paths["ics_path"].exists() and paths["ics_path"].stat().st_size > 0
     google_status = google_integration_status(settings, safe_driver_id, paths["google_token_path"])
     urls = driver_urls(safe_driver_id)
-    calendar_subscription_url = f"{request.url_root.rstrip('/')}{urls['calendar_url']}"
+    calendar_subscription_url = calendar_subscription_address(safe_driver_id, str(settings["calendar_access_token"]))
     needs_selfservice_setup = not session_store.has_saved_session()
     show_profile_switcher = len(list_driver_ids()) > 1
 
@@ -2648,23 +2692,10 @@ def settings_page(driver_id: str) -> str:
                                 <div class="notice warning" style="margin-top:1rem; margin-bottom:0;">Google-afhængigheder mangler: {{ google_dependency_error }}</div>
                                 {% endif %}
                                 <div class="field">
-                                    <label for="google_client_id">OAuth Client ID</label>
-                                    <input id="google_client_id" name="google_client_id" value="{{ settings.google_client_id }}">
-                                </div>
-                                <div class="field">
-                                    <label for="google_client_secret">OAuth Client Secret</label>
-                                    <input id="google_client_secret" name="google_client_secret" type="password" value="{{ settings.google_client_secret }}">
-                                </div>
-                                <div class="field">
                                     <label for="google_calendar_id">Google Calendar ID</label>
                                     <input id="google_calendar_id" name="google_calendar_id" value="{{ settings.google_calendar_id }}">
                                 </div>
-                                <div class="field">
-                                    <label for="google_redirect_uri">Redirect URI</label>
-                                    <input id="google_redirect_uri" name="google_redirect_uri" value="{{ settings.google_redirect_uri or google_status.redirect_uri }}">
-                                </div>
                                 <div class="small" style="margin-top:0.9rem;">Status: {{ google_status.summary }}</div>
-                                <div class="small">Brug redirect URI'en ovenfor i Google Cloud Console under OAuth credentials.</div>
                                 <div class="google-actions">
                                     <a class="ghost-button" href="{{ urls.google_connect_url }}">Log ind med Google</a>
                                     <form onsubmit="handleActionSubmit(event, '{{ urls.google_sync_url }}')">
@@ -2674,6 +2705,22 @@ def settings_page(driver_id: str) -> str:
                                         <button type="submit" class="ghost-button">Afbryd forbindelse</button>
                                     </form>
                                 </div>
+                                <details style="margin-top:1rem;">
+                                    <summary style="cursor:pointer; font-weight:700;">Avanceret OAuth-opsætning</summary>
+                                    <div class="field">
+                                        <label for="google_client_id">OAuth Client ID</label>
+                                        <input id="google_client_id" name="google_client_id" value="{{ settings.google_client_id }}">
+                                    </div>
+                                    <div class="field">
+                                        <label for="google_client_secret">OAuth Client Secret</label>
+                                        <input id="google_client_secret" name="google_client_secret" type="password" value="{{ settings.google_client_secret }}">
+                                    </div>
+                                    <div class="field">
+                                        <label for="google_redirect_uri">Redirect URI</label>
+                                        <input id="google_redirect_uri" name="google_redirect_uri" value="{{ settings.google_redirect_uri or google_status.redirect_uri }}">
+                                    </div>
+                                    <div class="small">Disse felter konfigureres én gang for RosterMate. Derefter bruger du kun “Log ind med Google”.</div>
+                                </details>
                             </div>
                         </div>
                         <div class="helper-links">
@@ -3083,4 +3130,4 @@ def health() -> tuple[Any, int]:
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=8080, debug=False, use_reloader=False)
+    app.run(host=os.environ.get("ROSTERMATE_HOST", "0.0.0.0"), port=8080, debug=False, use_reloader=False)

@@ -58,6 +58,37 @@ def test_google_client_id_requires_google_oauth_format():
     assert valid_google_client_id("") is False
 
 
+def test_lan_access_only_exposes_token_protected_calendar(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
+    monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
+    paths = app_module.ensure_storage("15831")
+    assert paths is not None
+    app_module.save_driver_settings("15831", {"calendar_access_token": "private-token", "wizard_completed": True})
+    paths["ics_path"].write_text("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", encoding="utf-8")
+
+    app_module.app.config["TESTING"] = True
+    with app_module.app.test_client() as client:
+        blocked_dashboard = client.get("/15831/", environ_base={"REMOTE_ADDR": "192.168.1.20"})
+        blocked_calendar = client.get("/15831/calendar.ics", environ_base={"REMOTE_ADDR": "192.168.1.20"})
+        calendar = client.get(
+            "/15831/calendar.ics?token=private-token",
+            environ_base={"REMOTE_ADDR": "192.168.1.20"},
+        )
+
+    assert blocked_dashboard.status_code == 403
+    assert blocked_calendar.status_code == 403
+    assert calendar.status_code == 200
+
+
+def test_calendar_subscription_address_can_use_configured_lan_host(monkeypatch):
+    monkeypatch.setenv("ROSTERMATE_LAN_HOST", "192.168.1.42")
+
+    address = app_module.calendar_subscription_address("15831", "private-token")
+
+    assert address == "http://192.168.1.42:8080/15831/calendar.ics?token=private-token"
+
+
 def test_sync_schedule_preserves_events_outside_selected_window(tmp_path):
     existing_events = [
         {
