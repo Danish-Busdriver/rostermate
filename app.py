@@ -265,6 +265,9 @@ def load_settings(driver_id: str) -> dict[str, Any]:
         "employment_type": employment_type,
         "google_client_id": env_values.get("GOOGLE_CLIENT_ID", stored.get("google_client_id", "")),
         "google_client_secret": env_values.get("GOOGLE_CLIENT_SECRET", stored.get("google_client_secret", "")),
+        "google_oauth_client_file": env_values.get(
+            "GOOGLE_OAUTH_CLIENT_FILE", stored.get("google_oauth_client_file", "")
+        ),
         "google_calendar_id": env_values.get("GOOGLE_CALENDAR_ID", stored.get("google_calendar_id", "")),
         "google_calendar_name": env_values.get(
             "GOOGLE_CALENDAR_NAME", stored.get("google_calendar_name", "RosterMate")
@@ -560,6 +563,9 @@ def google_redirect_uri(settings: dict[str, Any], driver_id: str, base_url: str 
     configured = str(settings.get("google_redirect_uri", "")).strip()
     if configured:
         return configured
+    client_config = load_google_client_config(settings)
+    if client_config and "installed" in client_config:
+        return "http://localhost:8080/"
     if base_url:
         return f"{base_url.rstrip('/')}/{normalize_driver_id(driver_id)}/google/callback"
     return f"http://127.0.0.1:8080/{normalize_driver_id(driver_id)}/google/callback"
@@ -592,10 +598,38 @@ def valid_google_client_id(value: Any) -> bool:
     return bool(re.fullmatch(r"\d+-[a-z0-9_-]+\.apps\.googleusercontent\.com", client_id, re.IGNORECASE))
 
 
+def load_google_client_config(settings: dict[str, Any]) -> dict[str, Any] | None:
+    configured_path = str(settings.get("google_oauth_client_file") or "").strip()
+    if configured_path:
+        client_path = Path(configured_path).expanduser()
+        try:
+            payload = json.loads(client_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        client_type = "installed" if "installed" in payload else "web" if "web" in payload else ""
+        client = payload.get(client_type, {}) if client_type else {}
+        if client_type and valid_google_client_id(client.get("client_id")) and client.get("client_secret"):
+            return payload
+
+    if valid_google_client_id(settings.get("google_client_id")) and settings.get("google_client_secret"):
+        return {
+            "web": {
+                "client_id": settings.get("google_client_id", ""),
+                "client_secret": settings.get("google_client_secret", ""),
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [str(settings.get("google_redirect_uri") or "http://127.0.0.1:8080/google/callback")],
+            }
+        }
+    return None
+
+
 def google_integration_status(settings: dict[str, Any], driver_id: str, token_path: Path, base_url: str | None = None) -> dict[str, Any]:
     has_client_id = bool(str(settings.get("google_client_id") or "").strip())
     client_id_valid = valid_google_client_id(settings.get("google_client_id"))
-    credentials_ready = bool(client_id_valid and settings.get("google_client_secret"))
+    client_config = load_google_client_config(settings)
+    credentials_ready = client_config is not None
+    client_type = "desktop" if client_config and "installed" in client_config else "web" if client_config else ""
     token_data = load_json(token_path, {})
     connected = bool(token_data.get("refresh_token") or token_data.get("token"))
     calendar_id = str(settings.get("google_calendar_id") or "")
@@ -606,6 +640,9 @@ def google_integration_status(settings: dict[str, Any], driver_id: str, token_pa
     elif credentials_ready:
         summary = "Google OAuth er klar. Log ind for at forbinde kalenderen."
         tone = "info"
+    elif str(settings.get("google_oauth_client_file") or "").strip():
+        summary = "Google OAuth JSON-filen kunne ikke læses eller er ugyldig."
+        tone = "warning"
     elif has_client_id and not client_id_valid:
         summary = "OAuth Client ID er ugyldigt. Indsæt det fulde Google Client ID, som slutter med .apps.googleusercontent.com."
         tone = "warning"
@@ -615,6 +652,7 @@ def google_integration_status(settings: dict[str, Any], driver_id: str, token_pa
 
     return {
         "credentials_ready": credentials_ready,
+        "client_type": client_type,
         "client_id_valid": client_id_valid,
         "connected": connected,
         "calendar_id": calendar_id,
@@ -637,15 +675,9 @@ def google_dependencies_available() -> tuple[bool, str]:
 def create_google_flow(settings: dict[str, Any], driver_id: str, base_url: str, state: str | None = None) -> Any:
     from google_auth_oauthlib.flow import Flow
 
-    client_config = {
-        "web": {
-            "client_id": settings.get("google_client_id", ""),
-            "client_secret": settings.get("google_client_secret", ""),
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "redirect_uris": [google_redirect_uri(settings, driver_id, base_url)],
-        }
-    }
+    client_config = load_google_client_config(settings)
+    if client_config is None:
+        raise RuntimeError("Google OAuth-klienten er ikke konfigureret")
     flow = Flow.from_client_config(client_config, scopes=GOOGLE_SCOPES, state=state)
     flow.redirect_uri = google_redirect_uri(settings, driver_id, base_url)
     return flow
@@ -1199,6 +1231,10 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
 @app.route("/", methods=["GET", "POST"])
 def home() -> Any:
     notice = ""
+    if request.method == "GET" and (request.args.get("code") or request.args.get("error")):
+        oauth_driver_id = session.get("google_oauth_driver_id")
+        if oauth_driver_id:
+            return google_callback(str(oauth_driver_id))
     driver_ids = list_driver_ids()
     if request.method == "GET" and len(driver_ids) == 1 and request.args.get("choose") != "1":
         only_driver_id = driver_ids[0]

@@ -50,6 +50,46 @@ def test_legacy_google_calendar_id_is_not_shown_as_the_calendar_name():
     assert google_calendar_display_name("Mine vagter") == "Mine vagter"
 
 
+def test_desktop_oauth_json_uses_localhost_callback(tmp_path):
+    client_file = tmp_path / "google-oauth.json"
+    client_file.write_text(
+        json.dumps(
+            {
+                "installed": {
+                    "client_id": "273038382990-preview.apps.googleusercontent.com",
+                    "client_secret": "preview-secret",
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": ["http://localhost"],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    settings = {"google_oauth_client_file": str(client_file)}
+
+    config = app_module.load_google_client_config(settings)
+    status = app_module.google_integration_status(settings, "1234", tmp_path / "missing-token.json")
+
+    assert config is not None and "installed" in config
+    assert app_module.google_redirect_uri(settings, "1234") == "http://localhost:8080/"
+    assert status["credentials_ready"] is True
+    assert status["client_type"] == "desktop"
+
+
+def test_root_dispatches_desktop_oauth_callback(monkeypatch):
+    monkeypatch.setattr(app_module, "google_callback", lambda driver_id: f"callback:{driver_id}")
+    app_module.app.config["TESTING"] = True
+
+    with app_module.app.test_client() as client:
+        with client.session_transaction() as flask_session:
+            flask_session["google_oauth_driver_id"] = "1234"
+        response = client.get("/?code=test-code&state=test-state")
+
+    assert response.status_code == 200
+    assert response.get_data(as_text=True) == "callback:1234"
+
+
 def test_google_calendar_is_created_with_editable_default_name():
     service = _CalendarService()
 
