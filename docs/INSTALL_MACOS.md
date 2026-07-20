@@ -11,7 +11,7 @@ Denne guide indeholder installation, opdatering og teknisk drift af RosterMate p
 
 ## Anbefalet installation
 
-Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.6.0-macOS.zip`, og pak filen ud.
+Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.6.1-macOS.zip`, og pak filen ud.
 
 Dobbeltklik derefter på `RosterMate.app`. Ved første start henter appen selv en officiel Python-pakke fra python.org, hvis den mangler, og installerer derefter app-afhængighederne samt Chromium-browseren. macOS beder om administratorgodkendelse, hvis Python skal installeres. RosterMate bruger port 8080, hvis den er ledig; ellers vælges automatisk den første ledige port frem til 8179. Opsætningsguiden åbnes automatisk på den valgte port. Første start kan tage et par minutter.
 
@@ -72,6 +72,18 @@ Manuel opdatering:
 git pull --ff-only
 ./install.command
 ```
+
+## Afinstallation
+
+Dobbeltklik på `uninstall.command` i RosterMate-mappen. Kommandoen:
+
+- beder om bekræftelse
+- stopper kun en server, der identificerer sig som RosterMate
+- fjerner RosterMates automatiske loginstart
+- sikkerhedskopierer profiler, kalenderfiler, historik og lokal konfiguration i `Dokumenter`
+- flytter selve installationen til Papirkurv, så den fortsat kan gendannes
+
+Sikkerhedskopien kan indeholde SelfService-session og andre private data og bør derfor ikke deles.
 
 ## Kalenderadresser
 

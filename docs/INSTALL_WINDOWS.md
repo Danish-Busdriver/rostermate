@@ -10,7 +10,7 @@ Windows-udgaven bruger samme dashboard, SelfService-synkronisering, profiler, hi
 
 ## Anbefalet installation
 
-1. Download `RosterMate-1.6.0-Windows-Setup.exe` fra den seneste GitHub Release.
+1. Download `RosterMate-1.6.1-Windows-Setup.exe` fra den seneste GitHub Release.
 2. Dobbeltklik på installationsfilen.
 3. Vælg eventuelt en skrivebordsgenvej og gennemfør guiden.
 4. Lad installationsprogrammet hente Python, RosterMates afhængigheder og Chromium.
@@ -85,6 +85,16 @@ Windows gemmer brugerdata uden for Git-repositoryet:
 ```
 
 Placeringen kan tilsidesættes med miljøvariablen `ROSTERMATE_HOME` på både Windows og macOS.
+
+## Afinstallation
+
+Brug en af disse muligheder:
+
+- Åbn Start-menuen og vælg **Afinstaller RosterMate**.
+- Åbn Windows **Installerede apps**, find RosterMate, og vælg **Afinstaller**.
+- Dobbeltklik på `uninstall-windows.cmd` i installationsmappen.
+
+Afinstallationen stopper RosterMate og fjerner automatiske loginopgaver, programfiler og genveje. Profiler og kalenderdata under `%LOCALAPPDATA%\RosterMate` bevares, så de kan genbruges ved en senere installation. Mappen kan slettes manuelt, hvis alle data også skal fjernes.
 
 ## Kalenderdeling
 

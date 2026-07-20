@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "1.6.0"
+  #define AppVersion "1.6.1"
 #endif
 
 #define AppName "RosterMate"
@@ -42,6 +42,7 @@ Source: "..\..\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createa
 
 [Icons]
 Name: "{autoprograms}\RosterMate"; Filename: "{app}\run-windows.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\assets\RosterMate.ico"
+Name: "{autoprograms}\Afinstaller RosterMate"; Filename: "{uninstallexe}"
 Name: "{userdesktop}\RosterMate"; Filename: "{app}\run-windows.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\assets\RosterMate.ico"; Tasks: desktopicon
 
 [Tasks]
@@ -50,6 +51,9 @@ Name: "desktopicon"; Description: "Opret en genvej på skrivebordet"; GroupDescr
 [Run]
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-windows.ps1"""; WorkingDir: "{app}"; StatusMsg: "Installerer RosterMate og browserkomponenter..."; Flags: waituntilterminated
 Filename: "{app}\run-windows.cmd"; Description: "Start RosterMate"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
+
+[UninstallRun]
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall-windows.ps1"""; WorkingDir: "{app}"; Flags: runhidden waituntilterminated
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\.venv"
