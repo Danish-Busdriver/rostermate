@@ -5,7 +5,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app as app_module
-from app import build_event_from_shift, select_next_calendar_events, software_info, sync_schedule
+from app import build_event_from_shift, list_driver_ids, select_next_calendar_events, software_info, sync_schedule
 
 
 def test_build_event_from_shift_handles_regular_and_all_day_shifts():
@@ -153,6 +153,18 @@ def test_software_info_exposes_version_and_survives_missing_git(tmp_path):
     assert info["version"] == app_module.APP_VERSION
     assert info["commit"] == "ukendt"
     assert info["updated_at"] == "ukendt"
+
+
+def test_list_driver_ids_only_returns_configured_numeric_profiles(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path)
+    (tmp_path / "15831").mkdir()
+    (tmp_path / "15831" / "settings.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "empty").mkdir()
+    (tmp_path / "empty" / "settings.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "999").mkdir()
+    (tmp_path / "999" / "settings.json").touch()
+
+    assert list_driver_ids() == ["15831"]
 
 
 def test_settings_route_persists_selfservice_credentials(tmp_path, monkeypatch):

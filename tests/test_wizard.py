@@ -135,6 +135,25 @@ def test_wizard_test_connection_route_returns_error_without_session(tmp_path, mo
     assert response.get_json()["status"] == "error"
 
 
+def test_home_redirects_to_the_only_configured_profile(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
+    monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
+    profile_dir = app_module.DATA_DIR / "15831"
+    profile_dir.mkdir(parents=True)
+    (profile_dir / "settings.json").write_text('{"wizard_completed": false}', encoding="utf-8")
+
+    app_module.app.config["TESTING"] = True
+    with app_module.app.test_client() as client:
+        response = client.get("/", follow_redirects=False)
+        chooser = client.get("/?choose=1")
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/15831/wizard")
+    assert chooser.status_code == 200
+    assert b"Tilf\xc3\xb8j profil" in chooser.data
+
+
 def test_wizard_complete_creates_launch_agent_when_enabled(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "BASE_DIR", tmp_path)
     monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")

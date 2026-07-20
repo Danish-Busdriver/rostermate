@@ -129,6 +129,17 @@ def get_driver_paths(driver_id: str) -> dict[str, Path]:
         abort(404)
 
 
+def list_driver_ids() -> list[str]:
+    if not DATA_DIR.exists():
+        return []
+    driver_ids: list[str] = []
+    for path in DATA_DIR.iterdir():
+        settings_path = path / "settings.json"
+        if path.is_dir() and path.name.isdigit() and settings_path.exists() and settings_path.stat().st_size > 0:
+            driver_ids.append(path.name)
+    return sorted(driver_ids, key=lambda value: int(value))
+
+
 def load_json(path: Path, default: Any) -> Any:
     if not path.exists() or path.stat().st_size == 0:
         return default
@@ -1028,6 +1039,17 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
 @app.route("/", methods=["GET", "POST"])
 def home() -> Any:
     notice = ""
+    driver_ids = list_driver_ids()
+    if request.method == "GET" and len(driver_ids) == 1 and request.args.get("choose") != "1":
+        only_driver_id = driver_ids[0]
+        paths = get_driver_paths(only_driver_id)
+        settings = load_settings(only_driver_id)
+        session_store = SelfServiceSessionStore.from_paths(only_driver_id, paths)
+        session["last_driver_id"] = only_driver_id
+        if should_show_first_run(settings, session_store) or should_show_welcome_back(settings, session_store):
+            return redirect(url_for("wizard_page", driver_id=only_driver_id))
+        return redirect(url_for("index", driver_id=only_driver_id))
+
     if request.method == "POST":
         submitted_driver_id = request.form.get("driver_id", "")
         try:
@@ -1113,8 +1135,8 @@ def home() -> Any:
         </head>
         <body>
             <form class="panel" method="post">
-                <h1>Vælg chaufførnummer</h1>
-                <p>RosterMate bruger nu chaufførnummer i URL'en, så flere ansatte kan dele samme maskine uden at blande data.</p>
+                <h1>{{ 'Tilføj profil' if driver_ids else 'Vælg chaufførnummer' }}</h1>
+                <p>{{ 'Indtast chaufførnummeret til den ekstra profil.' if driver_ids else "RosterMate bruger chaufførnummer i URL'en, så flere ansatte kan dele samme maskine uden at blande data." }}</p>
                 <label for="driver_id">Chaufførnummer</label>
                 <input id="driver_id" name="driver_id" inputmode="numeric" pattern="[0-9]*" value="{{ last_driver_id }}" placeholder="Fx 1234" required>
                 <button type="submit">Åbn dashboard</button>
@@ -1126,6 +1148,7 @@ def home() -> Any:
         </html>
         """,
         last_driver_id=session.get("last_driver_id", ""),
+        driver_ids=driver_ids,
         notice=notice,
     )
 
@@ -1293,6 +1316,7 @@ def index(driver_id: str) -> str:
     urls = driver_urls(safe_driver_id)
     calendar_subscription_url = f"{request.url_root.rstrip('/')}{urls['calendar_url']}"
     needs_selfservice_setup = not session_store.has_saved_session()
+    show_profile_switcher = len(list_driver_ids()) > 1
 
     return render_template_string(
         """
@@ -1861,11 +1885,14 @@ def index(driver_id: str) -> str:
                             <a href="{{ urls.dashboard_url }}" class="active">Dashboard</a>
                             <a href="{{ urls.settings_url }}">Indstillinger</a>
                             <a href="{{ urls.history_url }}">Historik</a>
+                            {% if not show_profile_switcher %}<a href="/?choose=1">Tilføj profil</a>{% endif %}
                         </nav>
+                        {% if show_profile_switcher %}
                         <form class="profile-switcher" action="/" method="post">
                             <input name="driver_id" inputmode="numeric" pattern="[0-9]*" value="{{ driver_id }}" aria-label="Skift chaufførnummer">
                             <button type="submit">Skift profil</button>
                         </form>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="hero">
@@ -2075,6 +2102,7 @@ def index(driver_id: str) -> str:
         urls=urls,
         calendar_subscription_url=calendar_subscription_url,
         software=software_info(),
+        show_profile_switcher=show_profile_switcher,
         needs_selfservice_setup=needs_selfservice_setup,
     )
 
@@ -2149,6 +2177,7 @@ def settings_page(driver_id: str) -> str:
     urls = driver_urls(safe_driver_id)
     has_selfservice_session = session_store.has_saved_session()
     needs_selfservice_setup = not has_selfservice_session
+    show_profile_switcher = len(list_driver_ids()) > 1
     return render_template_string(
         """
         <!doctype html>
@@ -2462,11 +2491,14 @@ def settings_page(driver_id: str) -> str:
                             <a href="{{ urls.dashboard_url }}">Dashboard</a>
                             <a href="{{ urls.settings_url }}" class="active">Indstillinger</a>
                             <a href="{{ urls.history_url }}">Historik</a>
+                            {% if not show_profile_switcher %}<a href="/?choose=1">Tilføj profil</a>{% endif %}
                         </nav>
+                        {% if show_profile_switcher %}
                         <form class="profile-switcher" action="/" method="post">
                             <input name="driver_id" inputmode="numeric" pattern="[0-9]*" value="{{ driver_id }}" aria-label="Skift chaufførnummer">
                             <button type="submit">Skift profil</button>
                         </form>
+                        {% endif %}
                     </div>
                 </div>
                 <section class="intro">
@@ -2612,6 +2644,7 @@ def settings_page(driver_id: str) -> str:
         google_dependency_error=google_dependency_error,
         urls=urls,
         has_selfservice_session=has_selfservice_session,
+        show_profile_switcher=show_profile_switcher,
     )
 
 
@@ -2756,6 +2789,7 @@ def history_page(driver_id: str) -> str:
     history = load_history(paths["history_path"])
     urls = driver_urls(safe_driver_id)
     formatted_history = []
+    show_profile_switcher = len(list_driver_ids()) > 1
     for entry in reversed(history):
         formatted_history.append(
             {
@@ -2907,11 +2941,14 @@ def history_page(driver_id: str) -> str:
                             <a href="{{ urls.dashboard_url }}">Dashboard</a>
                             <a href="{{ urls.settings_url }}">Indstillinger</a>
                             <a href="{{ urls.history_url }}" class="active">Historik</a>
+                            {% if not show_profile_switcher %}<a href="/?choose=1">Tilføj profil</a>{% endif %}
                         </nav>
+                        {% if show_profile_switcher %}
                         <form class="profile-switcher" action="/" method="post">
                             <input name="driver_id" inputmode="numeric" pattern="[0-9]*" value="{{ driver_id }}" aria-label="Skift chaufførnummer">
                             <button type="submit">Skift profil</button>
                         </form>
+                        {% endif %}
                     </div>
                 </div>
                 <section class="hero">
@@ -2957,6 +2994,7 @@ def history_page(driver_id: str) -> str:
         driver_id=safe_driver_id,
         history=formatted_history,
         urls=urls,
+        show_profile_switcher=show_profile_switcher,
     )
 
 

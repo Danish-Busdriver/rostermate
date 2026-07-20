@@ -43,6 +43,7 @@ Dette er et tidligt, men solidt fundament til en senere macOS-app med flere funk
 - Dashboardet viser softwareversion, Git-commit og datoen for seneste softwareopdatering
 - Kalenderlinket følger den aktive chaufførprofil, f.eks. `/15831/calendar.ics`
 - Guidet førstegangsopsætning og separate chaufførprofiler
+- Automatisk viderestilling, når der kun findes én profil; profilvælgeren vises først ved flere profiler
 - SelfService-login med lokalt gemt browsersession
 - SelfService-login håndterer Tide/SSO-viderestillinger uden at afbryde forbindelsen, mens siden navigerer
 - Synkronisering og forbindelsestest genbruger chaufførens vedvarende browserprofil, så Tide-sessionen bevares efter login
