@@ -93,15 +93,15 @@ Mac’en skal have en reserveret lokal IP, domænet skal pege på routerens offe
 
 Den almindelige bruger vælger blot kalendernavnet — `RosterMate` foreslås automatisk — og trykker **Log ind med Google**. Efter godkendelsen opretter RosterMate selv en separat Google-kalender og gemmer dens ID lokalt under chaufførprofilen.
 
-App-ejeren skal konfigurere RosterMates fælles OAuth-klient én gang, før knappen kan bruges. Med den nuværende lokale callback bruges en OAuth-klient af typen **Web application**:
+App-ejeren skal konfigurere RosterMates fælles OAuth-klient én gang, før knappen kan bruges. Den anbefalede klienttype er **Desktop app**, som åbner Googles login i brugerens normale browser og vender tilbage til `http://localhost:8080/`:
 
 1. Aktivér Google Calendar API i Google Cloud.
 2. Konfigurér OAuth-samtykkeskærmen.
-3. Opret en OAuth-klient til en webapplikation.
-4. Registrér den redirect-URI, som RosterMate viser.
-5. Gem det fulde Client ID og Client Secret lokalt via miljøvariablerne `GOOGLE_CLIENT_ID` og `GOOGLE_CLIENT_SECRET` eller under avanceret OAuth-opsætning.
+3. Opret en OAuth-klient af typen **Desktop app**.
+4. Download klientkonfigurationen som JSON.
+5. Gem filen lokalt og sæt dens sti som `GOOGLE_OAUTH_CLIENT_FILE` i `.env`.
 
-Client ID slutter normalt med `.apps.googleusercontent.com`. Gem aldrig Client Secret i GitHub eller i en offentlig releasefil. En offentlig app med mange brugere kan desuden kræve Googles OAuth-verifikation.
+Eksempel: `GOOGLE_OAUTH_CLIENT_FILE=/Users/dit-navn/rostermate-google-oauth.json`. Gem aldrig JSON-filen i GitHub eller i en offentlig releasefil. En offentlig app med mange brugere kan desuden kræve Googles OAuth-verifikation.
 
 ## Test installationen
 

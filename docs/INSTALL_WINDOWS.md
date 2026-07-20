@@ -97,7 +97,7 @@ Windows Firewall kan spørge, om Python må modtage trafik. Tillad kun private n
 
 Brugeren vælger et kalendernavn — `RosterMate` foreslås automatisk — og trykker **Log ind med Google**. Efter godkendelsen opretter appen en separat Google-kalender og gemmer dens ID lokalt under chaufførprofilen.
 
-App-ejeren skal først konfigurere RosterMates fælles OAuth-klient og aktivere Google Calendar API. Client ID og Client Secret kan gemmes lokalt som `GOOGLE_CLIENT_ID` og `GOOGLE_CLIENT_SECRET` eller under avanceret OAuth-opsætning. Hemmeligheder må ikke lægges i GitHub eller releasearkiver. Den registrerede callback-adresse skal svare præcist til den Redirect URI, som RosterMate viser.
+App-ejeren skal først aktivere Google Calendar API og oprette en OAuth-klient af typen **Desktop app**. Download klientens JSON-fil lokalt og sæt dens sti som `GOOGLE_OAUTH_CLIENT_FILE` i `.env`, for eksempel `C:\Users\Navn\RosterMate\google-oauth.json`. JSON-filen må ikke lægges i GitHub eller releasearkiver. Desktop-flowet åbner Googles login i standardbrowseren og vender tilbage til `http://localhost:8080/`.
 
 ## Automatiske opdateringer
 
