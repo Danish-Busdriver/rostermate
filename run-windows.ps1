@@ -5,6 +5,7 @@ $ProjectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $ProjectDir
 $Python = Join-Path $ProjectDir ".venv\Scripts\python.exe"
 $AppUrl = "http://127.0.0.1:8080"
+$WizardUrl = "http://localhost:8080/wizard/"
 
 if (-not (Test-Path $Python)) {
     throw "Det virtuelle miljø mangler. Kør install-windows.cmd først."
@@ -24,7 +25,7 @@ try {
         $ExistingPid = Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue |
             Select-Object -First 1 -ExpandProperty OwningProcess
         Start-RosterMateTray ([int]$ExistingPid)
-        Start-Process $AppUrl
+        Start-Process $WizardUrl
         exit 0
     }
     if ($Health.StatusCode -eq 200 -and $HealthData.status -eq "ok") {
@@ -54,7 +55,7 @@ for ($Attempt = 0; $Attempt -lt 20; $Attempt++) {
         $HealthData = $Health.Content | ConvertFrom-Json
         if ($Health.StatusCode -eq 200 -and $HealthData.version -eq $ExpectedVersion) {
             Start-RosterMateTray $ServerProcess.Id
-            Start-Process $AppUrl
+            Start-Process $WizardUrl
             exit 0
         }
     } catch {

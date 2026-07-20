@@ -10,7 +10,7 @@ Windows-udgaven bruger samme dashboard, SelfService-synkronisering, profiler, hi
 
 ## Anbefalet installation
 
-1. Download `RosterMate-1.5.1-Windows-Setup.exe` fra den seneste GitHub Release.
+1. Download `RosterMate-1.5.2-Windows-Setup.exe` fra den seneste GitHub Release.
 2. Dobbeltklik på installationsfilen.
 3. Vælg eventuelt en skrivebordsgenvej og gennemfør guiden.
 4. Lad installationsprogrammet hente Python, RosterMates afhængigheder og Chromium.
@@ -42,7 +42,7 @@ run-windows.cmd
 Startscriptet kontrollerer GitHub-opdateringer, afviser en eventuel forældet RosterMate-proces på port 8080, starter den aktuelle server skjult, kontrollerer dens versionsnummer og åbner derefter:
 
 ```text
-http://127.0.0.1:8080
+http://localhost:8080/wizard/
 ```
 
 Mens appen kører, vises RosterMate-logoet i Windows-systembakken. Højreklik på ikonet for at åbne dashboardet eller afslutte RosterMate. Start-menu- og skrivebordsgenveje bruger det samme logo.

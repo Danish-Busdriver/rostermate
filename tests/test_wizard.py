@@ -164,6 +164,19 @@ def test_home_redirects_to_the_only_configured_profile(tmp_path, monkeypatch):
     assert b"Tilf\xc3\xb8j profil" in chooser.data
 
 
+def test_global_wizard_address_opens_profile_setup(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
+    monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
+    app_module.app.config["TESTING"] = True
+
+    with app_module.app.test_client() as client:
+        response = client.get("/wizard/")
+
+    assert response.status_code == 200
+    assert b"V\xc3\xa6lg chauff\xc3\xb8rnummer" in response.data
+
+
 def test_wizard_complete_creates_launch_agent_when_enabled(tmp_path, monkeypatch):
     # This test specifically verifies the macOS LaunchAgent adapter. Windows
     # startup behavior is covered separately in test_platform.py.
