@@ -22,8 +22,14 @@ class SelfServiceSessionStore:
     def has_saved_session(self) -> bool:
         return self.storage_state_path.exists() and self.storage_state_path.stat().st_size > 0
 
+    @property
+    def session_storage_state_path(self) -> Path:
+        return self.storage_state_path.with_name("selfservice_session_storage.json")
+
     def clear(self) -> None:
         if self.storage_state_path.exists():
             self.storage_state_path.unlink()
+        if self.session_storage_state_path.exists():
+            self.session_storage_state_path.unlink()
         if self.user_data_dir.exists():
             shutil.rmtree(self.user_data_dir, ignore_errors=True)

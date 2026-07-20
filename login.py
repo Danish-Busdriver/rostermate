@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import threading
 import time
 import uuid
@@ -43,13 +44,53 @@ def launch_authenticated_context(
             user_data_dir=str(session_store.user_data_dir),
             headless=headless,
         )
+        restore_session_storage(context, session_store)
         return None, context
 
     browser = playwright.chromium.launch(headless=headless)
     context_options: dict[str, Any] = {}
     if session_store.has_saved_session():
         context_options["storage_state"] = str(session_store.storage_state_path)
-    return browser, browser.new_context(**context_options)
+    context = browser.new_context(**context_options)
+    restore_session_storage(context, session_store)
+    return browser, context
+
+
+def save_session_storage(page: Any, session_store: SelfServiceSessionStore) -> None:
+    payload = page.evaluate(
+        """() => ({
+            origin: window.location.origin,
+            items: Object.fromEntries(Object.entries(window.sessionStorage))
+        })"""
+    )
+    if not isinstance(payload, dict) or not payload.get("origin") or not isinstance(payload.get("items"), dict):
+        return
+    path = session_store.session_storage_state_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def restore_session_storage(context: Any, session_store: SelfServiceSessionStore) -> None:
+    path = session_store.session_storage_state_path
+    if not path.exists() or path.stat().st_size == 0:
+        return
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    if not isinstance(payload, dict) or not payload.get("origin") or not isinstance(payload.get("items"), dict):
+        return
+    serialized = json.dumps(payload).replace("</", "<\\/")
+    context.add_init_script(
+        script=f"""(() => {{
+            const saved = {serialized};
+            if (window.location.origin === saved.origin) {{
+                for (const [key, value] of Object.entries(saved.items)) {{
+                    window.sessionStorage.setItem(key, value);
+                }}
+            }}
+        }})();"""
+    )
 
 
 @dataclass
@@ -167,6 +208,7 @@ class SelfServiceLoginManager:
                         and ("Assignments" in page.url or "Arbejdskalender" in current_html)
                     )
                     if logged_in:
+                        save_session_storage(page, session_store)
                         context.storage_state(path=str(session_store.storage_state_path), indexed_db=True)
                         context.close()
                         context = None
