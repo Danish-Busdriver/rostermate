@@ -14,7 +14,7 @@ Markér **Add Python to PATH**, når Python installeres. Python Launcher `py.exe
 
 ## Anbefalet installation
 
-1. Download `RosterMate-1.4.0-Windows-Setup.exe` fra den seneste GitHub Release.
+1. Download `RosterMate-1.4.1-Windows-Setup.exe` fra den seneste GitHub Release.
 2. Dobbeltklik på installationsfilen.
 3. Vælg eventuelt en skrivebordsgenvej og gennemfør guiden.
 4. Lad installationsprogrammet installere RosterMates Python-afhængigheder og Chromium.
@@ -43,7 +43,7 @@ Dobbeltklik på:
 run-windows.cmd
 ```
 
-Startscriptet kontrollerer GitHub-opdateringer, starter serveren skjult, venter på health-check og åbner derefter:
+Startscriptet kontrollerer GitHub-opdateringer, afviser en eventuel forældet RosterMate-proces på port 8080, starter den aktuelle server skjult, kontrollerer dens versionsnummer og åbner derefter:
 
 ```text
 http://127.0.0.1:8080
