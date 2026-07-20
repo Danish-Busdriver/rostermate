@@ -90,6 +90,40 @@ def test_root_dispatches_desktop_oauth_callback(monkeypatch):
     assert response.get_data(as_text=True) == "callback:1234"
 
 
+def test_google_connect_accepts_desktop_oauth_without_manual_client_id(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
+    monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
+    app_module.ensure_storage("1234")
+    app_module.save_driver_settings(
+        "1234",
+        {"google_oauth_client_file": str(tmp_path / "google-oauth.json")},
+    )
+
+    class Flow:
+        def authorization_url(self, **kwargs):
+            return "https://accounts.google.com/o/oauth2/auth", "desktop-state"
+
+    monkeypatch.setattr(
+        app_module,
+        "google_integration_status",
+        lambda *args, **kwargs: {
+            "credentials_ready": True,
+            "client_id_valid": False,
+            "client_type": "desktop",
+        },
+    )
+    monkeypatch.setattr(app_module, "google_dependencies_available", lambda: (True, ""))
+    monkeypatch.setattr(app_module, "create_google_flow", lambda *args, **kwargs: Flow())
+
+    app_module.app.config["TESTING"] = True
+    with app_module.app.test_client() as client:
+        response = client.get("/1234/google/connect?google_calendar_name=RosterMate", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "https://accounts.google.com/o/oauth2/auth"
+
+
 def test_google_calendar_is_created_with_editable_default_name():
     service = _CalendarService()
 
