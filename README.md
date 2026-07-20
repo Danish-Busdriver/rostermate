@@ -103,10 +103,10 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 
 ## Installation
 
-- [Download RosterMate til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.6.0-macOS.zip)
-- [Download RosterMate Setup.exe til Windows (beta)](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.6.0-Windows-Setup.exe)
+- [Download RosterMate til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.6.1-macOS.zip)
+- [Download RosterMate Setup.exe til Windows (beta)](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.6.1-Windows-Setup.exe)
 
-Har du brug for hjælp, finder du de separate vejledninger til [macOS](docs/INSTALL_MACOS.md) og [Windows](docs/INSTALL_WINDOWS.md).
+Begge platforme har en tydelig afinstallationskommando. Har du brug for hjælp, finder du de separate vejledninger til [macOS](docs/INSTALL_MACOS.md) og [Windows](docs/INSTALL_WINDOWS.md).
 
 ## Projektet
 

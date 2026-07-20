@@ -79,7 +79,14 @@ def test_windows_startup_can_be_removed(tmp_path, monkeypatch):
 def test_windows_distribution_files_are_present():
     project_root = Path(__file__).resolve().parents[1]
 
-    for filename in ("install-windows.cmd", "install-windows.ps1", "run-windows.cmd", "run-windows.ps1"):
+    for filename in (
+        "install-windows.cmd",
+        "install-windows.ps1",
+        "run-windows.cmd",
+        "run-windows.ps1",
+        "uninstall-windows.cmd",
+        "uninstall-windows.ps1",
+    ):
         assert (project_root / filename).is_file()
 
     installer = (project_root / "install-windows.ps1").read_text(encoding="utf-8")
@@ -109,6 +116,8 @@ def test_windows_exe_installer_definition_is_present():
     assert "actions/upload-artifact@v4" in workflow
     assert "SetupIconFile=" in installer
     assert "RosterMate.ico" in installer
+    assert "Afinstaller RosterMate" in installer
+    assert "[UninstallRun]" in installer
 
 
 def test_macos_app_bootstraps_first_install_and_checks_version():
@@ -123,6 +132,10 @@ def test_macos_app_bootstraps_first_install_and_checks_version():
     assert 'python3 tray.py --server-pid "$server_pid"' in run_script
     assert 'wait "$server_pid"' in launcher
     assert 'http://localhost:$PORT/wizard/' in launcher
+    assert (project_root / "uninstall.command").is_file()
+    uninstaller = (project_root / "uninstall.command").read_text(encoding="utf-8")
+    assert "RosterMate Backup" in uninstaller
+    assert 'mv "$SCRIPT_DIR" "$destination"' in uninstaller
 
 
 def test_shared_tray_uses_the_rostermate_logo_and_expected_actions():
