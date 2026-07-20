@@ -404,6 +404,30 @@ def build_upcoming_shift_cards(events: list[dict[str, Any]], week_start: date, w
     return grouped_days
 
 
+def select_next_calendar_events(
+    events: list[dict[str, Any]],
+    today: date | None = None,
+    limit: int = 7,
+) -> list[dict[str, Any]]:
+    """Return the next calendar events, excluding stale and invalid entries."""
+    start_date = today or date.today()
+    upcoming: list[dict[str, Any]] = []
+
+    for event in events:
+        shift_date = str(event.get("date", "")).strip()
+        try:
+            event_date = date.fromisoformat(shift_date)
+        except ValueError:
+            continue
+        if event_date >= start_date:
+            upcoming.append(event)
+
+    return sorted(
+        upcoming,
+        key=lambda item: (str(item.get("date", "")), str(item.get("start", ""))),
+    )[:max(0, limit)]
+
+
 def describe_change(change: dict[str, Any]) -> dict[str, str]:
     change_type = str(change.get("type", "changed"))
     labels = {
@@ -1220,14 +1244,9 @@ def index(driver_id: str) -> str:
     events = load_json(paths["events_store_path"], [])
     changes = load_json(paths["changes_path"], [])
     history = load_history(paths["history_path"])
-    try:
-        week_offset = int(request.args.get("week_offset", "0"))
-    except ValueError:
-        week_offset = 0
-    week_offset = max(-52, min(52, week_offset))
-    week_navigation = build_week_navigation(events, week_offset)
     last_sync = format_timestamp(history[-1].get("timestamp") if history else None)
-    upcoming_shifts = build_upcoming_shift_cards(events, week_navigation["week_start"], week_navigation["week_end"])
+    next_events = select_next_calendar_events(events)
+    upcoming_shifts = build_upcoming_shift_cards(next_events, date.today(), date.max)
     dashboard_changes = [describe_change(change) for change in changes[:5]]
     history_count = len(history)
     ics_ready = paths["ics_path"].exists() and paths["ics_path"].stat().st_size > 0
@@ -1891,28 +1910,10 @@ def index(driver_id: str) -> str:
                     <div class="card">
                         <div class="card-head">
                             <div>
-                                <h2>Kommende vagter</h2>
-                                <p class="small">Grupperet pr. dag med tydelige typer, så arbejdsugen kan skannes i få blik.</p>
+                                <h2>De næste 7 kalenderposter</h2>
+                                <p class="small">Kun kommende poster fra i dag, sorteret efter dato og starttid.</p>
                             </div>
                             <a class="section-link" href="{{ urls.history_url }}">Se historik</a>
-                        </div>
-                        <div class="week-nav">
-                            <div>
-                                <strong>Ugevisning</strong>
-                                <div class="small">{{ week_navigation.label }}</div>
-                                <div class="small">{{ week_navigation.headline }} · Uge {{ week_navigation.week_number }}</div>
-                            </div>
-                            <div class="week-nav-links">
-                                {% if week_navigation.has_previous %}
-                                <a class="week-link" href="{{ urls.dashboard_url }}?week_offset={{ week_navigation.previous_offset }}">Forrige uge</a>
-                                {% endif %}
-                                {% if not week_navigation.is_current_week %}
-                                <a class="week-link current" href="{{ urls.dashboard_url }}">Denne uge</a>
-                                {% endif %}
-                                {% if week_navigation.has_next %}
-                                <a class="week-link" href="{{ urls.dashboard_url }}?week_offset={{ week_navigation.next_offset }}">Næste uge</a>
-                                {% endif %}
-                            </div>
                         </div>
                         <div class="shift-grid">
                             {% for day in upcoming_shifts %}
@@ -2026,7 +2027,6 @@ def index(driver_id: str) -> str:
         dashboard_changes=dashboard_changes,
         history_count=history_count,
         ics_ready=ics_ready,
-        week_navigation=week_navigation,
         google_status=google_status,
         urls=urls,
         needs_selfservice_setup=needs_selfservice_setup,

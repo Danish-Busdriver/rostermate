@@ -39,6 +39,10 @@ Dette er et tidligt, men solidt fundament til en senere macOS-app med flere funk
 # Nuværende funktioner
 
 - Dashboard til visning af importerede vagter
+- Dashboardets liste “De næste 7 kalenderposter” viser kun poster fra dags dato og frem, sorteret efter dato og starttid
+- Guidet førstegangsopsætning og separate chaufførprofiler
+- SelfService-login med lokalt gemt browsersession
+- Google Kalender-integration og ICS-eksport
 - Import af planer via JSON
 - Sammenligning af gamle og nye planer
 - Registrering af ændringer i historik
@@ -168,7 +172,15 @@ pytest -q
 │   └── BEGINNER_WORKFLOW.md
 ├── static/
 ├── tests/
-│   └── test_sync.py
+│   ├── test_sync.py
+│   └── test_wizard.py
+├── wizard.py
+├── sync.py
+├── login.py
+├── session.py
+├── settings.py
+├── dashboard.py
+├── launch_agent.py
 └── RosterMate.app/
 ```
 
@@ -176,19 +188,19 @@ pytest -q
 
 # Screenshots
 
-Her er et par billeder af dashboardet og appens visuelle profil:
+Her er billeder af den aktuelle opsætningsguide og dashboardet i RosterMate:
 
-# Screenshots
+### Opsætningsguide
 
-Her er billeder af dashboardet i RosterMate:
+![Opsætningsguide](assets/screenshots/setup-guide.png)
 
 ### Dashboard
 
-[![Dashboard](https://github.com/Danish-Busdriver/rostermate/raw/main/assets/screenshots/dashboard.png)](https://github.com/Danish-Busdriver/rostermate/blob/main/assets/screenshots/dashboard.png)
+[![Dashboard med de næste 7 kalenderposter](assets/screenshots/dashboard.png)](assets/screenshots/dashboard.png)
 
 ### Oversigt over vagter
 
-[![Oversigt](https://github.com/Danish-Busdriver/rostermate/raw/main/assets/screenshots/overview.png)](https://github.com/Danish-Busdriver/rostermate/blob/main/assets/screenshots/overview.png)
+[![Oversigt](assets/screenshots/overview.png)](assets/screenshots/overview.png)
 
 ---
 

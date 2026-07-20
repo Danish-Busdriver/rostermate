@@ -5,7 +5,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app as app_module
-from app import build_event_from_shift, sync_schedule
+from app import build_event_from_shift, select_next_calendar_events, sync_schedule
 
 
 def test_build_event_from_shift_handles_regular_and_all_day_shifts():
@@ -115,6 +115,36 @@ def test_sync_schedule_does_not_duplicate_existing_events(tmp_path):
     assert len(updated_events) == 1
     assert updated_events[0]["id"] == "same-event"
     assert changes == []
+
+
+def test_select_next_calendar_events_excludes_past_and_limits_to_seven():
+    events = [
+        {"id": "past", "date": "2026-07-19", "start": "2026-07-19T08:00:00"},
+        {"id": "invalid", "date": "not-a-date", "start": ""},
+        *[
+            {
+                "id": f"future-{index}",
+                "date": f"2026-07-{20 + index:02d}",
+                "start": f"2026-07-{20 + index:02d}T08:00:00",
+            }
+            for index in range(9)
+        ],
+    ]
+
+    selected = select_next_calendar_events(events, today=app_module.date(2026, 7, 20))
+
+    assert [event["id"] for event in selected] == [f"future-{index}" for index in range(7)]
+
+
+def test_select_next_calendar_events_sorts_same_day_by_start_time():
+    events = [
+        {"id": "late", "date": "2026-07-20", "start": "2026-07-20T14:00:00"},
+        {"id": "early", "date": "2026-07-20", "start": "2026-07-20T06:00:00"},
+    ]
+
+    selected = select_next_calendar_events(events, today=app_module.date(2026, 7, 20))
+
+    assert [event["id"] for event in selected] == ["early", "late"]
 
 
 def test_settings_route_persists_selfservice_credentials(tmp_path, monkeypatch):
