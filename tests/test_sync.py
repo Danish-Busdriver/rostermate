@@ -122,19 +122,12 @@ def test_settings_route_persists_selfservice_credentials(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
     monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
-    monkeypatch.setattr(app_module, "HISTORY_PATH", tmp_path / "data" / "history.json")
-    monkeypatch.setattr(app_module, "PLAN_PATH", tmp_path / "data" / "plan.json")
-    monkeypatch.setattr(app_module, "SETTINGS_PATH", tmp_path / "data" / "settings.json")
-    monkeypatch.setattr(app_module, "SCHEDULE_PATH", tmp_path / "output" / "schedule.json")
-    monkeypatch.setattr(app_module, "EVENTS_STORE_PATH", tmp_path / "output" / "events_store.json")
-    monkeypatch.setattr(app_module, "CHANGES_PATH", tmp_path / "output" / "changes.json")
-    monkeypatch.setattr(app_module, "ICS_PATH", tmp_path / "output" / "vagter.ics")
 
     app_module.app.config["TESTING"] = True
 
     with app_module.app.test_client() as client:
         response = client.post(
-            "/settings",
+            "/1234/settings",
             data={
                 "url": "https://selfservice.example",
                 "user": "tester",
@@ -143,8 +136,74 @@ def test_settings_route_persists_selfservice_credentials(tmp_path, monkeypatch):
             },
         )
 
+        second_response = client.post(
+            "/5678/settings",
+            data={
+                "url": "https://selfservice.other",
+                "user": "other",
+                "pass": "secret-2",
+                "remove_old_shifts": "false",
+            },
+        )
+
     assert response.status_code == 200
-    settings = app_module.load_settings()
-    assert settings["url"] == "https://selfservice.example"
-    assert settings["user"] == "tester"
-    assert settings["pass"] == "secret"
+    assert second_response.status_code == 200
+
+    first_settings = app_module.load_settings("1234")
+    second_settings = app_module.load_settings("5678")
+
+    assert first_settings["url"] == "https://selfservice.example"
+    assert first_settings["user"] == "tester"
+    assert first_settings["pass"] == "secret"
+    assert second_settings["url"] == "https://selfservice.other"
+    assert second_settings["user"] == "other"
+    assert second_settings["pass"] == "secret-2"
+
+
+def test_new_driver_redirects_to_wizard(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
+    monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
+
+    app_module.app.config["TESTING"] = True
+
+    with app_module.app.test_client() as client:
+        response = client.post("/", data={"driver_id": "1234"}, follow_redirects=False)
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/1234/wizard")
+
+
+def test_wizard_complete_persists_preferences_and_redirects(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
+    monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
+    monkeypatch.setattr(app_module, "sync_launch_agent_preference", lambda *args, **kwargs: None)
+
+    app_module.app.config["TESTING"] = True
+
+    with app_module.app.test_client() as client:
+        response = client.post(
+            "/1234/wizard/complete",
+            data={
+                "calendar_name": "Min Vagtplan",
+                "days_ahead": "14",
+                "keep_old_shifts": "true",
+                "launch_at_login": "true",
+                "show_menu_bar_icon": "true",
+                "notify_on_changes": "true",
+            },
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/1234/")
+
+    settings = app_module.load_settings("1234")
+    assert settings["calendar_name"] == "Min Vagtplan"
+    assert settings["days_ahead"] == 14
+    assert settings["keep_old_shifts"] is True
+    assert settings["remove_old_shifts"] is False
+    assert settings["wizard_completed"] is True
