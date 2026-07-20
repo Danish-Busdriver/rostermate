@@ -4,8 +4,9 @@ Set-StrictMode -Version Latest
 $ProjectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $ProjectDir
 $Python = Join-Path $ProjectDir ".venv\Scripts\python.exe"
-$AppUrl = "http://127.0.0.1:8080"
-$WizardUrl = "http://localhost:8080/wizard/"
+$Port = & $Python port_config.py configured
+$AppUrl = "http://127.0.0.1:$Port"
+$WizardUrl = "http://localhost:$Port/wizard/"
 
 if (-not (Test-Path $Python)) {
     throw "Det virtuelle miljø mangler. Kør install-windows.cmd først."
@@ -22,14 +23,14 @@ try {
     $Health = Invoke-WebRequest -UseBasicParsing -Uri "$AppUrl/health" -TimeoutSec 2
     $HealthData = $Health.Content | ConvertFrom-Json
     if ($Health.StatusCode -eq 200 -and $HealthData.version -eq $ExpectedVersion) {
-        $ExistingPid = Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue |
+        $ExistingPid = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
             Select-Object -First 1 -ExpandProperty OwningProcess
         Start-RosterMateTray ([int]$ExistingPid)
         Start-Process $WizardUrl
         exit 0
     }
     if ($Health.StatusCode -eq 200 -and $HealthData.status -eq "ok") {
-        Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue |
+        Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
             Select-Object -ExpandProperty OwningProcess -Unique |
             ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
         Start-Sleep -Milliseconds 500
@@ -39,6 +40,10 @@ try {
 }
 
 & $Python auto_update.py
+$Port = & $Python port_config.py ensure
+$env:ROSTERMATE_PORT = "$Port"
+$AppUrl = "http://127.0.0.1:$Port"
+$WizardUrl = "http://localhost:$Port/wizard/"
 
 $DataRoot = Join-Path $env:LOCALAPPDATA "RosterMate"
 $LogDir = Join-Path $DataRoot "logs"

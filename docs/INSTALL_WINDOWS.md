@@ -10,7 +10,7 @@ Windows-udgaven bruger samme dashboard, SelfService-synkronisering, profiler, hi
 
 ## Anbefalet installation
 
-1. Download `RosterMate-1.5.2-Windows-Setup.exe` fra den seneste GitHub Release.
+1. Download `RosterMate-1.6.0-Windows-Setup.exe` fra den seneste GitHub Release.
 2. Dobbeltklik på installationsfilen.
 3. Vælg eventuelt en skrivebordsgenvej og gennemfør guiden.
 4. Lad installationsprogrammet hente Python, RosterMates afhængigheder og Chromium.
@@ -39,13 +39,15 @@ Dobbeltklik på:
 run-windows.cmd
 ```
 
-Startscriptet kontrollerer GitHub-opdateringer, afviser en eventuel forældet RosterMate-proces på port 8080, starter den aktuelle server skjult, kontrollerer dens versionsnummer og åbner derefter:
+Startscriptet kontrollerer GitHub-opdateringer, genstarter kun en proces der kan identificeres som en ældre RosterMate-version, vælger ellers en ledig port, starter den aktuelle server skjult og kontrollerer dens versionsnummer, før browseren åbnes:
 
 ```text
-http://localhost:8080/wizard/
+http://localhost:<valgt-port>/wizard/
 ```
 
 Mens appen kører, vises RosterMate-logoet i Windows-systembakken. Højreklik på ikonet for at åbne dashboardet eller afslutte RosterMate. Start-menu- og skrivebordsgenveje bruger det samme logo.
+
+RosterMate bruger port 8080, hvis den er ledig. Hvis et andet program allerede bruger den, vælges automatisk den første ledige port frem til 8179. Porten kan senere ændres under **Indstillinger → Lokal server** og træder i kraft efter genstart.
 
 Logfiler gemmes under:
 
@@ -96,7 +98,7 @@ Windows Firewall kan spørge, om Python må modtage trafik. Tillad kun private n
 
 Brugeren vælger et kalendernavn — `RosterMate` foreslås automatisk — og trykker **Log ind med Google**. Efter godkendelsen opretter appen en separat Google-kalender og gemmer dens ID lokalt under chaufførprofilen.
 
-App-ejeren skal først aktivere Google Calendar API og oprette en OAuth-klient af typen **Desktop app**. Download klientens JSON-fil lokalt og sæt dens sti som `GOOGLE_OAUTH_CLIENT_FILE` i `.env`, for eksempel `C:\Users\Navn\RosterMate\google-oauth.json`. JSON-filen må ikke lægges i GitHub eller releasearkiver. Desktop-flowet åbner Googles login i standardbrowseren og vender tilbage til `http://localhost:8080/`.
+App-ejeren skal først aktivere Google Calendar API og oprette en OAuth-klient af typen **Desktop app**. Download klientens JSON-fil lokalt og sæt dens sti som `GOOGLE_OAUTH_CLIENT_FILE` i `.env`, for eksempel `C:\Users\Navn\RosterMate\google-oauth.json`. JSON-filen må ikke lægges i GitHub eller releasearkiver. Desktop-flowet åbner Googles login i standardbrowseren og vender tilbage til `http://localhost:<valgt-port>/`.
 
 ## Automatiske opdateringer
 

@@ -13,8 +13,9 @@ from pathlib import Path
 from PIL import Image
 import pystray
 
+from port_config import configured_port
 
-APP_URL = "http://127.0.0.1:8080"
+
 PROJECT_DIR = Path(__file__).resolve().parent
 ICON_PATH = PROJECT_DIR / "static" / "Rostermate.png"
 
@@ -80,7 +81,7 @@ def run_tray(server_pid: int) -> int:
     image = Image.open(ICON_PATH).convert("RGBA")
 
     def open_dashboard(_icon: pystray.Icon, _item: pystray.MenuItem) -> None:
-        webbrowser.open(APP_URL)
+        webbrowser.open(f"http://localhost:{configured_port()}/")
 
     def quit_app(icon: pystray.Icon, _item: pystray.MenuItem) -> None:
         threading.Thread(target=stop_server, args=(server_pid,), daemon=True).start()

@@ -19,6 +19,7 @@ from flask import Flask, abort, jsonify, redirect, render_template_string, reque
 from dashboard import should_show_first_run, should_show_welcome_back
 from launch_agent import sync_launch_agent_preference
 from login import launch_authenticated_context, login_manager, read_stable_page_content, save_session_storage
+from port_config import configured_port, port_is_available, save_port, valid_port
 from session import SelfServiceSessionStore
 from settings import apply_wizard_preferences, with_setup_defaults
 from sync import build_sync_preview, fetch_status_is_error, run_initial_sync
@@ -58,7 +59,11 @@ GOOGLE_TOKEN_PATH = DATA_DIR / "google_token.json"
 GOOGLE_SYNC_STATE_PATH = DATA_DIR / "google_sync_state.json"
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar"]
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.5.2"
+APP_VERSION = "1.6.0"
+
+
+def application_port() -> int:
+    return configured_port(root=DATA_DIR.parent)
 
 
 def is_loopback_request() -> bool:
@@ -565,10 +570,10 @@ def google_redirect_uri(settings: dict[str, Any], driver_id: str, base_url: str 
         return configured
     client_config = load_google_client_config(settings)
     if client_config and "installed" in client_config:
-        return "http://localhost:8080/"
+        return f"http://localhost:{application_port()}/"
     if base_url:
         return f"{base_url.rstrip('/')}/{normalize_driver_id(driver_id)}/google/callback"
-    return f"http://127.0.0.1:8080/{normalize_driver_id(driver_id)}/google/callback"
+    return f"http://127.0.0.1:{application_port()}/{normalize_driver_id(driver_id)}/google/callback"
 
 
 def local_network_address() -> str:
@@ -589,7 +594,7 @@ def local_network_address() -> str:
 def calendar_subscription_address(driver_id: str, token: str, public_base_url: str = "") -> str:
     base_url = str(public_base_url or "").strip().rstrip("/")
     if not base_url:
-        base_url = f"http://{local_network_address()}:8080"
+        base_url = f"http://{local_network_address()}:{application_port()}"
     return f"{base_url}/{normalize_driver_id(driver_id)}/calendar.ics?token={token}"
 
 
@@ -618,7 +623,7 @@ def load_google_client_config(settings: dict[str, Any]) -> dict[str, Any] | None
                 "client_secret": settings.get("google_client_secret", ""),
                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                 "token_uri": "https://oauth2.googleapis.com/token",
-                "redirect_uris": [str(settings.get("google_redirect_uri") or "http://127.0.0.1:8080/google/callback")],
+                "redirect_uris": [str(settings.get("google_redirect_uri") or f"http://127.0.0.1:{application_port()}/google/callback")],
             }
         }
     return None
@@ -1523,7 +1528,7 @@ def index(driver_id: str) -> str:
     ics_ready = paths["ics_path"].exists() and paths["ics_path"].stat().st_size > 0
     google_status = google_integration_status(settings, safe_driver_id, paths["google_token_path"])
     urls = driver_urls(safe_driver_id)
-    local_calendar_url = f"http://127.0.0.1:8080{urls['calendar_url']}"
+    local_calendar_url = f"http://127.0.0.1:{application_port()}{urls['calendar_url']}"
     lan_calendar_url = calendar_subscription_address(
         safe_driver_id,
         str(settings["calendar_access_token"]),
@@ -1536,6 +1541,7 @@ def index(driver_id: str) -> str:
     )
     needs_selfservice_setup = not session_store.has_saved_session()
     show_profile_switcher = len(list_driver_ids()) > 1
+    app_port = application_port()
 
     return render_template_string(
         """
@@ -2331,6 +2337,7 @@ def index(driver_id: str) -> str:
         public_calendar_url=public_calendar_url,
         software=software_info(),
         show_profile_switcher=show_profile_switcher,
+        app_port=app_port,
         needs_selfservice_setup=needs_selfservice_setup,
     )
 
@@ -2406,6 +2413,7 @@ def settings_page(driver_id: str) -> str:
     has_selfservice_session = session_store.has_saved_session()
     needs_selfservice_setup = not has_selfservice_session
     show_profile_switcher = len(list_driver_ids()) > 1
+    app_port = application_port()
     return render_template_string(
         """
         <!doctype html>
@@ -2823,6 +2831,15 @@ def settings_page(driver_id: str) -> str:
                                 </div>
                             </div>
                             <div class="section span-2">
+                                <h2>Lokal server</h2>
+                                <div class="small">Porten gælder for hele installationen og alle chaufførprofiler.</div>
+                                <div class="field">
+                                    <label for="app_port">Port</label>
+                                    <input id="app_port" name="app_port" type="number" min="1024" max="65535" value="{{ app_port }}">
+                                    <div class="field-hint">En ændring træder i kraft, næste gang RosterMate genstartes. Kalenderlinks og opsætningsguiden følger automatisk den valgte port.</div>
+                                </div>
+                            </div>
+                            <div class="section span-2">
                                 <h2>Google Calendar</h2>
                                 <div class="small">Log ind med din Google-konto og synkronisér de lokale vagter direkte til en Google Kalender.</div>
                                 {% if not google_available %}
@@ -2888,6 +2905,7 @@ def settings_page(driver_id: str) -> str:
         urls=urls,
         has_selfservice_session=has_selfservice_session,
         show_profile_switcher=show_profile_switcher,
+        app_port=app_port,
     )
 
 
@@ -2901,6 +2919,12 @@ def settings_route(driver_id: str) -> tuple[Any, int]:
         employment_type = "ramme_ansat"
 
     remove_old_shifts = request.form.get("remove_old_shifts") == "true"
+    current_port = application_port()
+    requested_port = valid_port(request.form.get("app_port", current_port))
+    if requested_port is None:
+        return jsonify({"status": "error", "message": "Porten skal være mellem 1024 og 65535."}), 400
+    if requested_port != current_port and not port_is_available(requested_port):
+        return jsonify({"status": "error", "message": f"Port {requested_port} bruges allerede af et andet program."}), 409
     updated_settings = {
         **settings,
         "url": request.form.get("url", settings.get("url", "")),
@@ -2922,7 +2946,17 @@ def settings_route(driver_id: str) -> tuple[Any, int]:
         ).strip().rstrip("/"),
     }
     save_driver_settings(safe_driver_id, updated_settings)
-    return jsonify({"status": "ok", "message": "Indstillinger gemt", "employment_type": employment_type})
+    save_port(requested_port, root=DATA_DIR.parent)
+    port_changed = requested_port != current_port
+    message = "Indstillinger gemt. Genstart RosterMate for at bruge den nye port." if port_changed else "Indstillinger gemt"
+    return jsonify({
+        "status": "ok",
+        "message": message,
+        "employment_type": employment_type,
+        "port": requested_port,
+        "restart_required": port_changed,
+        "next_url": f"http://localhost:{requested_port}/wizard/",
+    })
 
 
 @app.route("/<driver_id>/google/connect")
@@ -3289,4 +3323,4 @@ def health() -> tuple[Any, int]:
 
 
 if __name__ == "__main__":
-    app.run(host=os.environ.get("ROSTERMATE_HOST", "0.0.0.0"), port=8080, debug=False, use_reloader=False)
+    app.run(host=os.environ.get("ROSTERMATE_HOST", "0.0.0.0"), port=application_port(), debug=False, use_reloader=False)

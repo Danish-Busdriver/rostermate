@@ -92,7 +92,8 @@ def test_windows_distribution_files_are_present():
     assert 'Invoke-WebRequest -UseBasicParsing -Uri "$AppUrl/health"' in launcher
     assert "$HealthData.version -eq $ExpectedVersion" in launcher
     assert "Start-RosterMateTray" in launcher
-    assert 'http://localhost:8080/wizard/' in launcher
+    assert 'http://localhost:$Port/wizard/' in launcher
+    assert "port_config.py ensure" in launcher
 
 
 def test_windows_exe_installer_definition_is_present():
@@ -116,12 +117,12 @@ def test_macos_app_bootstraps_first_install_and_checks_version():
 
     assert "./install.command" in launcher
     assert "EXPECTED_VERSION=" in launcher
-    assert 'curl -fsS "http://127.0.0.1:8080/health"' in launcher
+    assert 'curl -fsS "http://127.0.0.1:$PORT/health"' in launcher
     assert "Første installation kan tage et par minutter" in launcher
     run_script = (project_root / "run.command").read_text(encoding="utf-8")
     assert 'python3 tray.py --server-pid "$server_pid"' in run_script
     assert 'wait "$server_pid"' in launcher
-    assert 'http://localhost:8080/wizard/' in launcher
+    assert 'http://localhost:$PORT/wizard/' in launcher
 
 
 def test_shared_tray_uses_the_rostermate_logo_and_expected_actions():

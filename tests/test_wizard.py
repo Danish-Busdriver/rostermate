@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import sys
 
@@ -175,6 +176,38 @@ def test_global_wizard_address_opens_profile_setup(tmp_path, monkeypatch):
 
     assert response.status_code == 200
     assert b"V\xc3\xa6lg chauff\xc3\xb8rnummer" in response.data
+
+
+def test_settings_page_contains_installation_port(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
+    monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
+    app_module.save_driver_settings("1234", {"wizard_completed": True})
+    app_module.app.config["TESTING"] = True
+
+    with app_module.app.test_client() as client:
+        response = client.get("/1234/settings-page")
+
+    assert response.status_code == 200
+    assert b"Lokal server" in response.data
+    assert b'name="app_port"' in response.data
+
+
+def test_settings_can_change_installation_port(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
+    monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
+    monkeypatch.setattr(app_module, "port_is_available", lambda port: port == 8092)
+    app_module.app.config["TESTING"] = True
+
+    with app_module.app.test_client() as client:
+        response = client.post("/1234/settings", data={"app_port": "8092"})
+
+    payload = response.get_json()
+    assert response.status_code == 200
+    assert payload["restart_required"] is True
+    assert payload["next_url"] == "http://localhost:8092/wizard/"
+    assert json.loads((tmp_path / "data" / "app-config.json").read_text(encoding="utf-8")) == {"port": 8092}
 
 
 def test_wizard_complete_creates_launch_agent_when_enabled(tmp_path, monkeypatch):
