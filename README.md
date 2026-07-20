@@ -98,6 +98,17 @@ Når det er færdigt åbnes appen automatisk på:
 http://127.0.0.1:8080
 ```
 
+## Opdater den lokale installation
+
+Automatiske GitHub-opdateringer er endnu ikke implementeret. Opdater derfor installationen manuelt fra projektmappen:
+
+```bash
+git pull --ff-only
+./install.command
+```
+
+`git pull --ff-only` henter kun en opdatering, når den kan anvendes uden at overskrive lokale commits. `install.command` opdaterer derefter Python-afhængighederne.
+
 ## Manuel installation (hvis scripts ikke virker)
 
 Hvis shell-scripts ikke virker på dit system, kan du installere manuelt:
