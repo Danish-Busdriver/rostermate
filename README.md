@@ -27,6 +27,8 @@ Opsætningsguidens præferenceside viser den hentede vagtoversigt direkte efter 
 Når guiden færdiggøres, fortsætter den direkte til dashboardet uden at genstarte den aktive lokale server.
 Kalenderfilen eksporterer tidsbestemte vagter som RFC 5545-kompatible UTC-tidspunkter og heldagsvagter som datoer, så Apple Kalender kan vise begge typer korrekt.
 
+Google Calendar kræver en OAuth-klient af typen **Web application**. Aktivér Google Calendar API, konfigurér OAuth-samtykkeskærmen, og registrér den redirect-URI, som vises i RosterMate. Det fulde Client ID slutter med `.apps.googleusercontent.com`; RosterMate afviser ugyldige ID'er lokalt, før Google-login åbnes.
+
 Projektet er bygget som en lokal macOS-webapp i Python og Flask, så det kan udvikles og bruges uden at kræve en cloud-løsning. Formålet er at gøre det lettere at:
 
 - importere vagtplaner

@@ -512,8 +512,15 @@ def google_redirect_uri(settings: dict[str, Any], driver_id: str, base_url: str 
     return f"http://127.0.0.1:8080/{normalize_driver_id(driver_id)}/google/callback"
 
 
+def valid_google_client_id(value: Any) -> bool:
+    client_id = str(value or "").strip()
+    return bool(re.fullmatch(r"\d+-[a-z0-9_-]+\.apps\.googleusercontent\.com", client_id, re.IGNORECASE))
+
+
 def google_integration_status(settings: dict[str, Any], driver_id: str, token_path: Path, base_url: str | None = None) -> dict[str, Any]:
-    credentials_ready = bool(settings.get("google_client_id") and settings.get("google_client_secret"))
+    has_client_id = bool(str(settings.get("google_client_id") or "").strip())
+    client_id_valid = valid_google_client_id(settings.get("google_client_id"))
+    credentials_ready = bool(client_id_valid and settings.get("google_client_secret"))
     token_data = load_json(token_path, {})
     connected = bool(token_data.get("refresh_token") or token_data.get("token"))
     calendar_id = str(settings.get("google_calendar_id") or "primary")
@@ -523,12 +530,16 @@ def google_integration_status(settings: dict[str, Any], driver_id: str, token_pa
     elif credentials_ready:
         summary = "Google OAuth er klar. Log ind for at forbinde kalenderen."
         tone = "info"
+    elif has_client_id and not client_id_valid:
+        summary = "OAuth Client ID er ugyldigt. Indsæt det fulde Google Client ID, som slutter med .apps.googleusercontent.com."
+        tone = "warning"
     else:
         summary = "Tilføj Google OAuth Client ID og Client Secret for at aktivere Google Calendar-sync."
         tone = "warning"
 
     return {
         "credentials_ready": credentials_ready,
+        "client_id_valid": client_id_valid,
         "connected": connected,
         "calendar_id": calendar_id,
         "redirect_uri": google_redirect_uri(settings, driver_id, base_url),
@@ -2723,6 +2734,15 @@ def google_connect(driver_id: str) -> Any:
     safe_driver_id = normalize_driver_id(driver_id)
     settings = load_settings(safe_driver_id)
     google_status = google_integration_status(settings, safe_driver_id, paths["google_token_path"], request.url_root)
+    if not google_status["client_id_valid"]:
+        return redirect(
+            url_for(
+                "settings_page",
+                driver_id=safe_driver_id,
+                notice="OAuth Client ID er ugyldigt. Opret en Web application-klient i Google Cloud og indsæt det fulde ID, som slutter med .apps.googleusercontent.com.",
+                notice_type="error",
+            )
+        )
     if not google_status["credentials_ready"]:
         return redirect(url_for("settings_page", driver_id=safe_driver_id, notice="Gem først Google Client ID og Client Secret", notice_type="warning"))
 

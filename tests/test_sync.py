@@ -5,7 +5,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app as app_module
-from app import build_event_from_shift, list_driver_ids, select_next_calendar_events, software_info, sync_schedule, write_outputs
+from app import build_event_from_shift, list_driver_ids, select_next_calendar_events, software_info, sync_schedule, valid_google_client_id, write_outputs
 from sync import fetch_status_is_error, run_initial_sync
 
 
@@ -50,6 +50,12 @@ def test_write_outputs_creates_rfc5545_calendar(tmp_path):
     assert b"DTSTART;VALUE=DATE:20260722\r\n" in calendar
     assert b"DTEND;VALUE=DATE:20260723\r\n" in calendar
     assert b"+0200" not in calendar
+
+
+def test_google_client_id_requires_google_oauth_format():
+    assert valid_google_client_id("123456-example.apps.googleusercontent.com") is True
+    assert valid_google_client_id("dkbusdriver") is False
+    assert valid_google_client_id("") is False
 
 
 def test_sync_schedule_preserves_events_outside_selected_window(tmp_path):
