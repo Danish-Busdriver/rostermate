@@ -14,10 +14,10 @@ from flask import Flask, abort, jsonify, redirect, render_template_string, reque
 
 from dashboard import should_show_first_run, should_show_welcome_back
 from launch_agent import sync_launch_agent_preference
-from login import launch_authenticated_context, login_manager, read_stable_page_content
+from login import launch_authenticated_context, login_manager, read_stable_page_content, save_session_storage
 from session import SelfServiceSessionStore
 from settings import apply_wizard_preferences, with_setup_defaults
-from sync import build_sync_preview, run_initial_sync
+from sync import build_sync_preview, fetch_status_is_error, run_initial_sync
 from wizard import FIRST_RUN_TEMPLATE, WIZARD_PREFERENCES_TEMPLATE
 
 app = Flask(__name__)
@@ -827,18 +827,11 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
                 f.write(initial_html[:10000])
 
             if "Username" in initial_html or "Password" in initial_html:
-                if session_store.has_saved_session():
-                    session_store.clear()
-                    context.close()
-                    if browser is not None:
-                        browser.close()
-                    return [], "SelfService-sessionen er udløbet. Forbind til SelfService igen i opsætningsguiden."
-
                 if not settings.get("user") or not settings.get("pass"):
                     context.close()
                     if browser is not None:
                         browser.close()
-                    return [], "Forbind til SelfService via opsætningsguiden først."
+                    return [], "SelfService-sessionen er udløbet, og gemte loginoplysninger mangler. Forbind via opsætningsguiden igen."
 
                 page.fill("input#Username", settings["user"])
                 page.fill("input#Password", settings["pass"])
@@ -875,7 +868,11 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
                 except:
                     pass
 
-                page.wait_for_load_state("networkidle", timeout=20000)
+                try:
+                    page.wait_for_load_state("networkidle", timeout=20000)
+                except Exception:
+                    pass
+                save_session_storage(page, session_store)
                 context.storage_state(path=str(session_store.storage_state_path), indexed_db=True)
 
                 try:
@@ -2147,7 +2144,7 @@ def sync_route(driver_id: str) -> tuple[Any, int]:
     existing_events = load_json(paths["events_store_path"], [])
     new_events, status_message = fetch_selfservice_schedule(days_ahead, safe_driver_id)
 
-    if not new_events and not existing_events:
+    if not new_events and (not existing_events or fetch_status_is_error(status_message)):
         return jsonify({"status": "error", "message": status_message}), 400
 
     window_start = date.today().strftime("%Y-%m-%d")
