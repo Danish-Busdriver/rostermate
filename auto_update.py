@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -28,6 +29,8 @@ def check_for_updates(project_dir: Path, runner: Runner = subprocess.run) -> Upd
         return UpdateResult("skipped", "Automatisk opdatering er slået fra.")
     if not (project_dir / ".git").exists():
         return UpdateResult("skipped", "Ingen Git-installation fundet; fortsætter uden opdatering.")
+    if shutil.which("git") is None:
+        return UpdateResult("skipped", "Git er ikke installeret; fortsætter uden automatisk opdatering.")
 
     dirty = _run(runner, ["git", "status", "--porcelain", "--untracked-files=no"], project_dir)
     if dirty.returncode != 0:

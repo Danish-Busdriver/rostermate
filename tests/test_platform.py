@@ -140,6 +140,26 @@ def test_macos_app_bootstraps_first_install_and_checks_version():
     assert 'mv "$SCRIPT_DIR" "$destination"' in uninstaller
 
 
+def test_macos_pkg_installer_is_present_and_self_contained():
+    project_root = Path(__file__).resolve().parents[1]
+    builder = (project_root / "build-macos-pkg.command").read_text(encoding="utf-8")
+    postinstall = (project_root / "installer" / "macos" / "scripts" / "postinstall").read_text(
+        encoding="utf-8"
+    )
+    workflow = (project_root / ".github" / "workflows" / "macos-installer.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "pkgbuild" in builder
+    assert "productbuild" in builder
+    assert "/Applications/RosterMate" in builder
+    assert 'python-$PYTHON_VERSION-macos11.pkg' in postinstall
+    assert "install.command" in postinstall
+    assert "RosterMate.app" in postinstall
+    assert "actions/upload-artifact@v4" in workflow
+    assert "Validate package contents" in workflow
+
+
 def test_shared_tray_uses_the_rostermate_logo_and_expected_actions():
     project_root = Path(__file__).resolve().parents[1]
     tray = (project_root / "tray.py").read_text(encoding="utf-8")

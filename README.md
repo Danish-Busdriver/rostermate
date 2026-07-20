@@ -91,7 +91,8 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 - [ ] Menu-bar-app til macOS
 - [ ] Notifikationer ved ændrede vagter
 - [ ] Forbedret release- og backupflow
-- [ ] Signeret macOS-installationspakke
+- [x] Direkte macOS PKG-installation uden brug af Terminal
+- [ ] Signeret og notariseret macOS-installationspakke
 - [ ] Digitalt signeret Windows-installationspakke uden SmartScreen-advarsel
 
 ### På længere sigt
@@ -103,8 +104,8 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 
 ## Installation
 
-- [Download RosterMate til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.6.2-macOS.zip)
-- [Download RosterMate Setup.exe til Windows (beta)](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.6.2-Windows-Setup.exe)
+- [Download RosterMate PKG til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.7.0-macOS.pkg)
+- [Download RosterMate Setup.exe til Windows (beta)](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.7.0-Windows-Setup.exe)
 
 Begge platforme har en tydelig afinstallationskommando. Har du brug for hjælp, finder du de separate vejledninger til [macOS](docs/INSTALL_MACOS.md) og [Windows](docs/INSTALL_WINDOWS.md).
 

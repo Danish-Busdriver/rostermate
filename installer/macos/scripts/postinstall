@@ -1,0 +1,49 @@
+#!/bin/bash
+set -euo pipefail
+
+APP_DIR="/Applications/RosterMate"
+PYTHON_VERSION="3.14.6"
+PYTHON_BIN="/Library/Frameworks/Python.framework/Versions/3.14/bin/python3"
+PYTHON_URL="https://www.python.org/ftp/python/$PYTHON_VERSION/python-$PYTHON_VERSION-macos11.pkg"
+
+console_user="$(stat -f '%Su' /dev/console)"
+if [ -z "$console_user" ] || [ "$console_user" = "root" ] || [ "$console_user" = "loginwindow" ]; then
+  echo "Ingen aktiv macOS-bruger blev fundet." >&2
+  exit 1
+fi
+
+console_uid="$(id -u "$console_user")"
+console_home="$(dscl . -read "/Users/$console_user" NFSHomeDirectory | awk '{print $2}')"
+
+python_current=false
+if [ -x "$PYTHON_BIN" ] && "$PYTHON_BIN" -c "import sys; raise SystemExit(0 if sys.version_info[:3] >= (3, 14, 6) else 1)"; then
+  python_current=true
+fi
+
+if [ "$python_current" = false ]; then
+  install_temp="$(mktemp -d /tmp/rostermate-python.XXXXXX)"
+  trap 'rm -rf "$install_temp"' EXIT
+  /usr/bin/curl --fail --location --retry 3 "$PYTHON_URL" --output "$install_temp/python.pkg"
+  /usr/sbin/installer -pkg "$install_temp/python.pkg" -target /
+fi
+
+if [ ! -x "$PYTHON_BIN" ]; then
+  echo "Python $PYTHON_VERSION blev ikke installeret korrekt." >&2
+  exit 1
+fi
+
+# Et nyt miljø sikrer, at appen bruger den aktuelle kompatible Python og de
+# nyeste afhængigheder fra denne RosterMate-udgave.
+rm -rf "$APP_DIR/.venv"
+chown -R "$console_user":staff "$APP_DIR"
+
+/bin/launchctl asuser "$console_uid" /usr/bin/sudo -u "$console_user" \
+  /usr/bin/env HOME="$console_home" PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+  /bin/bash "$APP_DIR/install.command"
+
+if [ "${ROSTERMATE_SKIP_AUTO_OPEN:-0}" != "1" ]; then
+  /bin/launchctl asuser "$console_uid" /usr/bin/sudo -u "$console_user" \
+    /usr/bin/env HOME="$console_home" /usr/bin/open "$APP_DIR/RosterMate.app"
+fi
+
+exit 0

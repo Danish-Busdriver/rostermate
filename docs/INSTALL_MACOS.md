@@ -11,9 +11,9 @@ Denne guide indeholder installation, opdatering og teknisk drift af RosterMate p
 
 ## Anbefalet installation
 
-Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.6.2-macOS.zip`, og pak filen ud.
+Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.7.0-macOS.pkg`, og dobbeltklik på filen. Du behøver ikke åbne Terminal.
 
-Dobbeltklik derefter på `RosterMate.app`. Ved første start henter appen selv en officiel Python-pakke fra python.org, hvis den mangler, og installerer derefter app-afhængighederne samt Chromium-browseren. macOS beder om administratorgodkendelse, hvis Python skal installeres. RosterMate bruger port 8080, hvis den er ledig; ellers vælges automatisk den første ledige port frem til 8179. Opsætningsguiden åbnes automatisk på den valgte port. Første start kan tage et par minutter.
+Installationsprogrammet placerer RosterMate i **Programmer**, kontrollerer en kompatibel officiel Python-version, opretter appens eget isolerede miljø og installerer alle Python-afhængigheder samt Chromium-browseren til SelfService. macOS beder om administratorgodkendelse. RosterMate bruger port 8080, hvis den er ledig; ellers vælges automatisk den første ledige port frem til 8179. Efter installationen starter appen og åbner opsætningsguiden automatisk på den valgte port. Første installation kan tage et par minutter.
 
 Terminalinstallation er et alternativ:
 
@@ -39,9 +39,9 @@ Følg opsætningsguiden i browseren for at oprette en chaufførprofil og forbind
 
 ## Start via macOS-app
 
-Repositoryet indeholder `RosterMate.app`. App-bundlen installerer manglende komponenter, genstarter kun en proces der kan identificeres som en ældre RosterMate-version og åbner først brugerfladen, når den aktuelle version har bestået sit health-check. Andre programmer på den ønskede port stoppes ikke. En installation uden profiler sendes direkte til opsætningsguiden. Mens RosterMate kører, vises logoet i menulinjen med genveje til at åbne eller afslutte appen. macOS kan ved første start bede om tilladelse til at åbne en app fra en ukendt udvikler.
+`RosterMate.app` ligger efter installationen i `/Applications/RosterMate`. Appen genstarter kun en proces, der kan identificeres som en ældre RosterMate-version, og åbner først brugerfladen, når den aktuelle version har bestået sit health-check. Andre programmer på den ønskede port stoppes ikke. En installation uden profiler sendes direkte til opsætningsguiden. Mens RosterMate kører, vises logoet i menulinjen med genveje til at åbne eller afslutte appen.
 
-Projektet er endnu ikke distribueret som en signeret eller notariseret `.pkg`-installation.
+`.pkg`-filen er endnu ikke signeret og notariseret med et Apple Developer ID. macOS kan derfor bede brugeren om at godkende åbningen under **Systemindstillinger → Anonymitet & sikkerhed**. Signering fjerner denne ekstra advarsel og er næste distributionsforbedring.
 
 ## Manuel installation
 
@@ -75,7 +75,7 @@ git pull --ff-only
 
 ## Afinstallation
 
-Dobbeltklik på `uninstall.command` i RosterMate-mappen. Kommandoen:
+Dobbeltklik på `uninstall.command` i `/Applications/RosterMate`. Kommandoen:
 
 - beder om bekræftelse
 - stopper kun en server, der identificerer sig som RosterMate

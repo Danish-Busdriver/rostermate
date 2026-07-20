@@ -1,0 +1,50 @@
+name: Build macOS installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "RosterMate version without leading v"
+        required: true
+        default: "1.7.0"
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Test shared application
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pytest -q
+
+      - name: Build PKG installer
+        run: |
+          chmod +x build-macos-pkg.command installer/macos/scripts/postinstall
+          ./build-macos-pkg.command "${{ inputs.version }}"
+
+      - name: Validate package contents
+        run: |
+          PKG="dist/macos/RosterMate-${{ inputs.version }}-macOS.pkg"
+          test -f "$PKG"
+          EXPANDED="$RUNNER_TEMP/rostermate-pkg"
+          pkgutil --expand-full "$PKG" "$EXPANDED"
+          test -f "$EXPANDED/RosterMate-component.pkg/Payload/app.py"
+          grep -q 'APP_VERSION = "${{ inputs.version }}"' "$EXPANDED/RosterMate-component.pkg/Payload/app.py"
+          test -x "$EXPANDED/RosterMate-component.pkg/Scripts/postinstall"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RosterMate-${{ inputs.version }}-macOS
+          path: dist/macos/RosterMate-${{ inputs.version }}-macOS.pkg
+          if-no-files-found: error
+          retention-days: 14

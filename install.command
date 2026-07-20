@@ -4,10 +4,10 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-PYTHON_VERSION="3.13.9"
+PYTHON_VERSION="3.14.6"
 PYTHON_CMD=""
 
-for candidate in python3 /usr/local/bin/python3.13 /Library/Frameworks/Python.framework/Versions/3.13/bin/python3; do
+for candidate in /Library/Frameworks/Python.framework/Versions/3.14/bin/python3 python3 /usr/local/bin/python3.14 /opt/homebrew/bin/python3; do
   if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)' 2>/dev/null; then
     PYTHON_CMD="$(command -v "$candidate")"
     break
@@ -28,7 +28,7 @@ end run
 APPLESCRIPT
   rm -f "$PYTHON_PKG"
   rmdir "$INSTALL_TEMP" 2>/dev/null || true
-  PYTHON_CMD="/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
+  PYTHON_CMD="/Library/Frameworks/Python.framework/Versions/3.14/bin/python3"
 fi
 
 if [ ! -d ".venv" ]; then
