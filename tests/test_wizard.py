@@ -155,6 +155,9 @@ def test_home_redirects_to_the_only_configured_profile(tmp_path, monkeypatch):
 
 
 def test_wizard_complete_creates_launch_agent_when_enabled(tmp_path, monkeypatch):
+    # This test specifically verifies the macOS LaunchAgent adapter. Windows
+    # startup behavior is covered separately in test_platform.py.
+    monkeypatch.setattr(launch_agent_module.sys, "platform", "darwin")
     monkeypatch.setattr(app_module, "BASE_DIR", tmp_path)
     monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
@@ -185,6 +188,7 @@ def test_wizard_complete_creates_launch_agent_when_enabled(tmp_path, monkeypatch
 
 
 def test_wizard_complete_does_not_restart_running_server(tmp_path, monkeypatch):
+    monkeypatch.setattr(launch_agent_module.sys, "platform", "darwin")
     monkeypatch.setattr(app_module, "BASE_DIR", tmp_path)
     monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
@@ -211,6 +215,9 @@ def test_wizard_complete_does_not_restart_running_server(tmp_path, monkeypatch):
 
 
 def test_wizard_complete_removes_launch_agent_when_disabled(tmp_path, monkeypatch):
+    # This test specifically verifies the macOS LaunchAgent adapter. Windows
+    # startup behavior is covered separately in test_platform.py.
+    monkeypatch.setattr(launch_agent_module.sys, "platform", "darwin")
     monkeypatch.setattr(app_module, "BASE_DIR", tmp_path)
     monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
