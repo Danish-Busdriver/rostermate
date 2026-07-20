@@ -25,6 +25,7 @@ RosterMate er et simpelt og stabilt værktøj til at håndtere buschaufførers v
 
 Opsætningsguidens præferenceside viser den hentede vagtoversigt direkte efter den første synkronisering.
 Når guiden færdiggøres, fortsætter den direkte til dashboardet uden at genstarte den aktive lokale server.
+Kalenderfilen eksporterer tidsbestemte vagter som RFC 5545-kompatible UTC-tidspunkter og heldagsvagter som datoer, så Apple Kalender kan vise begge typer korrekt.
 
 Projektet er bygget som en lokal macOS-webapp i Python og Flask, så det kan udvikles og bruges uden at kræve en cloud-løsning. Formålet er at gøre det lettere at:
 

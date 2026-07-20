@@ -5,7 +5,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app as app_module
-from app import build_event_from_shift, list_driver_ids, select_next_calendar_events, software_info, sync_schedule
+from app import build_event_from_shift, list_driver_ids, select_next_calendar_events, software_info, sync_schedule, write_outputs
 from sync import fetch_status_is_error, run_initial_sync
 
 
@@ -18,6 +18,38 @@ def test_build_event_from_shift_handles_regular_and_all_day_shifts():
     holiday = build_event_from_shift({"id": "Fri", "from": "", "to": ""}, "2026-07-10")
     assert holiday["all_day"] is True
     assert holiday["start"].startswith("2026-07-10")
+
+
+def test_write_outputs_creates_rfc5545_calendar(tmp_path):
+    write_outputs(
+        [
+            {
+                "id": "timed",
+                "title": "DO_afløs",
+                "date": "2026-07-21",
+                "start": "2026-07-21T06:00:00+02:00",
+                "end": "2026-07-21T14:00:00+02:00",
+                "all_day": False,
+            },
+            {
+                "id": "day-off",
+                "title": "Fri",
+                "date": "2026-07-22",
+                "start": "2026-07-22",
+                "end": "2026-07-23",
+                "all_day": True,
+            },
+        ],
+        [],
+        tmp_path,
+    )
+
+    calendar = (tmp_path / "vagter.ics").read_bytes()
+    assert b"DTSTART:20260721T040000Z\r\n" in calendar
+    assert b"DTEND:20260721T120000Z\r\n" in calendar
+    assert b"DTSTART;VALUE=DATE:20260722\r\n" in calendar
+    assert b"DTEND;VALUE=DATE:20260723\r\n" in calendar
+    assert b"+0200" not in calendar
 
 
 def test_sync_schedule_preserves_events_outside_selected_window(tmp_path):

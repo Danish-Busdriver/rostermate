@@ -6,9 +6,10 @@ import re
 import shutil
 import hashlib
 import subprocess
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from flask import Flask, abort, jsonify, redirect, render_template_string, request, send_file, session, url_for
 
@@ -771,6 +772,50 @@ def compare_plans(old_plan: list[dict[str, Any]], new_plan: list[dict[str, Any]]
     return changes
 
 
+def _escape_ics_text(value: Any) -> str:
+    return str(value).replace("\\", "\\\\").replace("\n", "\\n").replace(",", "\\,").replace(";", "\\;")
+
+
+def _ics_event_lines(event: dict[str, Any], timestamp: str) -> list[str]:
+    event_date = str(event.get("date") or "")
+    start_value = str(event.get("start") or "")
+    end_value = str(event.get("end") or "")
+    lines = ["BEGIN:VEVENT", f"UID:{_escape_ics_text(event.get('id', 'event'))}@rostermate.local", f"DTSTAMP:{timestamp}"]
+
+    if event.get("all_day"):
+        try:
+            start_date = date.fromisoformat(event_date or start_value[:10])
+        except ValueError:
+            return []
+        try:
+            end_date = date.fromisoformat(end_value[:10])
+        except ValueError:
+            end_date = start_date + timedelta(days=1)
+        if end_date <= start_date or "T" in end_value:
+            end_date = start_date + timedelta(days=1)
+        lines.extend([f"DTSTART;VALUE=DATE:{start_date:%Y%m%d}", f"DTEND;VALUE=DATE:{end_date:%Y%m%d}"])
+    else:
+        try:
+            start = datetime.fromisoformat(start_value)
+            end = datetime.fromisoformat(end_value)
+        except ValueError:
+            return []
+        local_timezone = ZoneInfo(LOCAL_TIMEZONE)
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=local_timezone)
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=local_timezone)
+        lines.extend(
+            [
+                f"DTSTART:{start.astimezone(timezone.utc):%Y%m%dT%H%M%SZ}",
+                f"DTEND:{end.astimezone(timezone.utc):%Y%m%dT%H%M%SZ}",
+            ]
+        )
+
+    lines.extend([f"SUMMARY:{_escape_ics_text(event.get('title', 'Vagt'))}", "END:VEVENT"])
+    return lines
+
+
 def write_outputs(events: list[dict[str, Any]], changes: list[dict[str, Any]], output_dir: Path | None = None) -> None:
     target_dir = output_dir or OUTPUT_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -779,21 +824,19 @@ def write_outputs(events: list[dict[str, Any]], changes: list[dict[str, Any]], o
     save_json(target_dir / "changes.json", changes)
     save_json(target_dir / "schedule.json", events)
 
-    ics_lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//RosterMate//EN"]
+    ics_lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//RosterMate//DA",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+        "X-WR-CALNAME:RosterMate",
+    ]
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     for event in events:
-        ics_lines.extend(
-            [
-                "BEGIN:VEVENT",
-                f"UID:{event.get('id', 'event')}",
-                f"DTSTAMP:{datetime.now().strftime('%Y%m%dT%H%M%SZ')}",
-                f"DTSTART:{event.get('start', '').replace('-', '').replace(':', '').replace('T', '')}",
-                f"DTEND:{event.get('end', '').replace('-', '').replace(':', '').replace('T', '')}",
-                f"SUMMARY:{event.get('title', 'Vagt')}",
-                "END:VEVENT",
-            ]
-        )
+        ics_lines.extend(_ics_event_lines(event, timestamp))
     ics_lines.append("END:VCALENDAR")
-    (target_dir / "vagter.ics").write_text("\n".join(ics_lines), encoding="utf-8")
+    (target_dir / "vagter.ics").write_bytes(("\r\n".join(ics_lines) + "\r\n").encode("utf-8"))
 
 
 def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[dict[str, Any]], str]:
@@ -3001,7 +3044,9 @@ def calendar_file(driver_id: str) -> Any:
     paths = get_driver_paths(driver_id)
     if not paths["ics_path"].exists():
         return jsonify({"status": "error", "message": "Kalenderfilen findes ikke endnu"}), 404
-    return send_file(paths["ics_path"], mimetype="text/calendar", as_attachment=False)
+    response = send_file(paths["ics_path"], mimetype="text/calendar; charset=utf-8", as_attachment=False, conditional=False)
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return response
 
 
 @app.route("/<driver_id>/backup", methods=["POST"])
