@@ -742,6 +742,10 @@ def build_event_from_shift(shift: dict[str, Any], shift_date: str) -> dict[str, 
     title = shift.get("id") or shift.get("title") or "Ukendt"
     shift_from = str(shift.get("from", "")).strip()
     shift_to = str(shift.get("to", "")).strip()
+    if re.fullmatch(r"\d{1,2}:\d{2}", shift_from):
+        shift_from = shift_from.zfill(5)
+    if re.fullmatch(r"\d{1,2}:\d{2}", shift_to):
+        shift_to = shift_to.zfill(5)
     shift_text = f"{title} {shift_from} {shift_to}".strip().lower()
 
     # Detektér all-day events: fridage, ferier, eller hvis begge tider er 00:00
@@ -897,6 +901,67 @@ def write_outputs(events: list[dict[str, Any]], changes: list[dict[str, Any]], o
     (target_dir / "vagter.ics").write_bytes(("\r\n".join(ics_lines) + "\r\n").encode("utf-8"))
 
 
+def parse_selfservice_calendar_pages(
+    html_pages: list[str],
+    window_start: date,
+    window_end: date,
+) -> list[dict[str, Any]]:
+    from bs4 import BeautifulSoup
+
+    events: list[dict[str, Any]] = []
+    seen_events: set[tuple[str, str, str, str]] = set()
+
+    for html in html_pages:
+        soup = BeautifulSoup(html, "html.parser")
+        for workday in soup.select("[data-workday-date]"):
+            raw_date = str(workday.get("data-workday-date") or "")
+            try:
+                shift_date = datetime.strptime(raw_date, "%Y%m%d").date()
+            except ValueError:
+                continue
+            if not window_start <= shift_date <= window_end:
+                continue
+
+            assignment = workday.select_one(".AssignmentsView")
+            if assignment is None:
+                continue
+            assignment_text = assignment.get_text(" ", strip=True)
+            normalized_text = assignment_text.casefold()
+            shift: dict[str, Any] | None = None
+
+            for all_day_title in ("Fri", "Vacation", "Stregdag"):
+                if re.search(rf"\b{re.escape(all_day_title.casefold())}\b", normalized_text):
+                    shift = {"id": all_day_title, "from": "00:00", "to": "00:00"}
+                    break
+
+            if shift is None:
+                id_match = re.search(r"\bID:\s*([^\s]+)", assignment_text, re.IGNORECASE)
+                from_match = re.search(r"\bFra:\s*(\d{1,2}:\d{2})", assignment_text, re.IGNORECASE)
+                to_match = re.search(r"\bTil:\s*(\d{1,2}:\d{2})", assignment_text, re.IGNORECASE)
+                if id_match and from_match and to_match:
+                    shift = {
+                        "id": id_match.group(1),
+                        "from": from_match.group(1),
+                        "to": to_match.group(1),
+                    }
+
+            if shift is None:
+                continue
+            event = build_event_from_shift(shift, shift_date.isoformat())
+            event["raw"] = assignment_text
+            event_key = (
+                str(event.get("date", "")),
+                str(event.get("title", "")),
+                str(event.get("start", "")),
+                str(event.get("end", "")),
+            )
+            if event_key not in seen_events:
+                seen_events.add(event_key)
+                events.append(event)
+
+    return sorted(events, key=lambda event: (str(event.get("date", "")), str(event.get("start", ""))))
+
+
 def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[dict[str, Any]], str]:
     paths = get_driver_paths(driver_id)
     settings = load_settings(driver_id)
@@ -908,7 +973,7 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
     except ImportError as exc:
         return [], f"Afhængighed mangler: {exc}"
 
-    html = None
+    html_pages: list[str] = []
     try:
         with sync_playwright() as p:
             browser, context = launch_authenticated_context(p, session_store, headless=True)
@@ -1007,9 +1072,42 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
                     browser.close()
                 return [], "SelfService navigerer stadig. Prøv synkroniseringen igen om et øjeblik."
 
+            html_pages.append(html)
+            window_end = date.today() + timedelta(days=days_ahead)
+            current_month = date.today().replace(day=1)
+            final_month = window_end.replace(day=1)
+            while current_month < final_month:
+                if current_month.month == 12:
+                    current_month = current_month.replace(year=current_month.year + 1, month=1)
+                else:
+                    current_month = current_month.replace(month=current_month.month + 1)
+                try:
+                    page.click("#NextMonth", timeout=5000)
+                    page.wait_for_function(
+                        """target => {
+                            const calendar = document.querySelector('#Calendar');
+                            return calendar && Number(calendar.dataset.year) === target.year
+                                && Number(calendar.dataset.month) === target.month;
+                        }""",
+                        arg={"year": current_month.year, "month": current_month.month},
+                        timeout=15000,
+                    )
+                    try:
+                        page.wait_for_selector("#Loading", state="hidden", timeout=10000)
+                    except Exception:
+                        pass
+                    month_html = read_stable_page_content(page)
+                    if month_html is not None:
+                        html_pages.append(month_html)
+                except Exception as exc:
+                    context.close()
+                    if browser is not None:
+                        browser.close()
+                    return [], f"Kunne ikke hente {current_month:%m/%Y} fra SelfService: {exc}"
+
             debug_path = paths["output_dir"] / "debug_html.log"
             with debug_path.open("w", encoding="utf-8") as f:
-                f.write(html[:100000])
+                f.write("\n<!-- ROSTERMATE MONTH BREAK -->\n".join(html_pages)[:300000])
 
             context.close()
             if browser is not None:
@@ -1018,120 +1116,20 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
     except Exception as exc:
         return [], f"Fejl ved henting af schedule: {str(exc)}"
 
-    if not html:
+    if not html_pages:
         return [], "Kunne ikke hente HTML fra SelfService"
 
-    # Parse HTML med BeautifulSoup
-    soup = BeautifulSoup(html, "html.parser")
-
     # Tjek om vi kunne logge ind (hvis vi er tilbage på login-siden)
-    if "Username" in html and "Password" in html:
+    if "Username" in html_pages[-1] and "Password" in html_pages[-1]:
         return [], "Login mislykkedes - tjek brugernavn og adgangskode"
 
-    if "Arbejdskalender" not in html:
+    if not all("Arbejdskalender" in html for html in html_pages):
         return [], "Siden loadede ikke korrekt - ikke på arbejdskalender siden"
-
-    # Søg efter vagt-data i kalenderen
-    shifts_with_dates: list[dict[str, Any]] = []
-    seen_shifts: set[str] = set()
-
-    # Enkel strategi: Søg efter alle elementer der indeholder vagter
-    all_text = soup.get_text(" ", strip=True)
-
-    # Søg efter dag-nummer efterfulgt af vagt-info
-    # Mønster: "08 Fri Normal tid: 0h00" eller "09 Vacation Normal tid: 7h24"
-
-    # Find alle dag-blokke (dag-nummer efterfulgt af indhold)
     today = date.today()
-
-    # Split efter dag-numre 1-31 og find vagter
-    day_pattern = re.compile(r'(\d{1,2})\s+(Fri|Vacation|(\d+\s+ID:\s+[A-Za-z_]+))', re.IGNORECASE)
-
-    for match in day_pattern.finditer(all_text):
-        day_num = int(match.group(1))
-        vagt_type = match.group(2)
-
-        if day_num < 1 or day_num > 31:
-            continue
-
-        # Beregn dato
-        try:
-            shift_date = today.replace(day=day_num)
-            # Hvis dagen er før idag, antag næste måned
-            if shift_date < today:
-                next_month = today.month + 1 if today.month < 12 else 1
-                next_year = today.year if today.month < 12 else today.year + 1
-                shift_date = shift_date.replace(month=next_month, year=next_year)
-        except ValueError:
-            continue
-
-        shift_date_str = shift_date.strftime("%Y-%m-%d")
-
-        # Håndter Fri
-        if vagt_type.lower() == "fri":
-            shift_key = f"Fri_{shift_date_str}"
-            if shift_key not in seen_shifts:
-                seen_shifts.add(shift_key)
-                shifts_with_dates.append({
-                    "id": "Fri",
-                    "from": "00:00",
-                    "to": "00:00",
-                    "date": shift_date_str,
-                })
-
-        # Håndter Vacation
-        elif vagt_type.lower() == "vacation":
-            shift_key = f"Vacation_{shift_date_str}"
-            if shift_key not in seen_shifts:
-                seen_shifts.add(shift_key)
-                shifts_with_dates.append({
-                    "id": "Vacation",
-                    "from": "00:00",
-                    "to": "00:00",
-                    "date": shift_date_str,
-                })
-
-        # Håndter DO_afl vagter
-        else:
-            id_match = re.search(r"(\d+\s+ID:\s+[A-Za-z_]+)", match.group(0) + all_text[match.end():match.end()+50])
-            if id_match:
-                id_part = id_match.group(1).strip()
-                # Find tider efter ID
-                times_after = re.findall(r"(\d{1,2}):(\d{2})", all_text[match.end():match.end()+200])
-                if len(times_after) >= 2:
-                    from_time = f"{times_after[0][0]}:{times_after[0][1]}"
-                    to_time = f"{times_after[1][0]}:{times_after[1][1]}"
-                else:
-                    from_time = "00:00"
-                    to_time = "00:00"
-
-                shift_key = f"{id_part}_{from_time}_{to_time}_{shift_date_str}"
-                if shift_key not in seen_shifts:
-                    seen_shifts.add(shift_key)
-                    shifts_with_dates.append({
-                        "id": id_part[:40],
-                        "from": from_time,
-                        "to": to_time,
-                        "date": shift_date_str,
-                    })
-
-    if not shifts_with_dates:
+    events = parse_selfservice_calendar_pages(html_pages, today, today + timedelta(days=days_ahead))
+    if not events:
         return [], "Ingen vagter fundet i kalenderen - muligvis ingen vagter planlagt"
-
-    today = date.today()
-    events: list[dict[str, Any]] = []
-
-    # Begræns til days_ahead vagter
-    max_shifts = days_ahead * 3  # Ca. 3 vagter per dag i værste fald
-    shifts_to_process = shifts_with_dates[:max_shifts]
-
-    # Konverter vagter til events, brug allerede hentede datoer
-    for shift in shifts_to_process:
-        # Hvis vi har hentet en dato fra HTML, brug den - ellers fordel over dage
-        shift_date = shift.get("date") or (today + timedelta(days=len(events) // 2)).strftime("%Y-%m-%d")
-        events.append(build_event_from_shift(shift, shift_date))
-
-    return events, f"Synkronisering gennemført - {len(shifts_to_process)} vagter hentet"
+    return events, f"Synkronisering gennemført - {len(events)} vagter hentet"
 
 
 @app.route("/", methods=["GET", "POST"])

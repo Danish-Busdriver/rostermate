@@ -5,7 +5,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app as app_module
-from app import build_event_from_shift, list_driver_ids, select_next_calendar_events, software_info, sync_schedule, valid_google_client_id, write_outputs
+from app import build_event_from_shift, list_driver_ids, parse_selfservice_calendar_pages, select_next_calendar_events, software_info, sync_schedule, valid_google_client_id, write_outputs
 from sync import fetch_status_is_error, run_initial_sync
 
 
@@ -18,6 +18,32 @@ def test_build_event_from_shift_handles_regular_and_all_day_shifts():
     holiday = build_event_from_shift({"id": "Fri", "from": "", "to": ""}, "2026-07-10")
     assert holiday["all_day"] is True
     assert holiday["start"].startswith("2026-07-10")
+
+
+def test_selfservice_parser_combines_months_and_uses_exact_workday_dates():
+    july_html = """
+    <div data-workday-date="20260731">
+      <div class="AssignmentsView"><table><tr><td>ID: DO_afløs</td></tr><tr><td>Fra: 5:00</td><td>Til: 13:00</td></tr></table></div>
+    </div>
+    """
+    august_html = """
+    <div data-workday-date="20260801">
+      <div class="AssignmentsView"><table><tr><td>ID: DO_afløs</td></tr><tr><td>Fra: 6:00</td><td>Til: 14:00</td></tr></table></div>
+    </div>
+    <div data-workday-date="20260802">
+      <div class="AssignmentsView"><table><tr><td>Fri</td></tr></table></div>
+    </div>
+    """
+
+    events = parse_selfservice_calendar_pages(
+        [july_html, august_html],
+        app_module.date(2026, 7, 31),
+        app_module.date(2026, 8, 2),
+    )
+
+    assert [event["date"] for event in events] == ["2026-07-31", "2026-08-01", "2026-08-02"]
+    assert events[1]["start"] == "2026-08-01T06:00:00"
+    assert events[2]["all_day"] is True
 
 
 def test_write_outputs_creates_rfc5545_calendar(tmp_path):

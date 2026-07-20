@@ -26,6 +26,7 @@ RosterMate er et simpelt og stabilt værktøj til at håndtere buschaufførers v
 Opsætningsguidens præferenceside viser den hentede vagtoversigt direkte efter den første synkronisering.
 Når guiden færdiggøres, fortsætter den direkte til dashboardet uden at genstarte den aktive lokale server.
 Kalenderfilen eksporterer tidsbestemte vagter som RFC 5545-kompatible UTC-tidspunkter og heldagsvagter som datoer, så Apple Kalender kan vise begge typer korrekt.
+SelfService-synkronisering navigerer automatisk gennem alle kalendermåneder, som dækkes af det valgte antal dage, og bruger Tides fulde dato på hver kalendercelle.
 
 Google Calendar kræver en OAuth-klient af typen **Web application**. Aktivér Google Calendar API, konfigurér OAuth-samtykkeskærmen, og registrér den redirect-URI, som vises i RosterMate. Det fulde Client ID slutter med `.apps.googleusercontent.com`; RosterMate afviser ugyldige ID'er lokalt, før Google-login åbnes.
 
