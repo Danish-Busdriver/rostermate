@@ -48,6 +48,7 @@ Dette er et tidligt, men solidt fundament til en senere macOS-app med flere funk
 - SelfService-login håndterer Tide/SSO-viderestillinger uden at afbryde forbindelsen, mens siden navigerer
 - Synkronisering og forbindelsestest genbruger chaufførens vedvarende browserprofil, så Tide-sessionen bevares efter login
 - Tide-fanens `sessionStorage` gemmes lokalt pr. chauffør og gendannes ved synkronisering, fordi login ellers udløber, når browserfanen lukkes
+- Udløbne Tide-websessioner genautentificeres automatisk med lokalt gemte loginoplysninger, og gamle kalenderposter tælles ikke som nye fund
 - Google Kalender-integration og ICS-eksport
 - Import af planer via JSON
 - Sammenligning af gamle og nye planer

@@ -4,6 +4,22 @@ from datetime import date, timedelta
 from typing import Any, Callable
 
 
+FETCH_ERROR_PREFIXES = (
+    "Afhængighed mangler",
+    "Fejl ved henting",
+    "Forbind til SelfService",
+    "Kunne ikke",
+    "Login mislykkedes",
+    "SelfService navigerer stadig",
+    "SelfService-sessionen",
+    "Siden loadede ikke korrekt",
+)
+
+
+def fetch_status_is_error(message: str) -> bool:
+    return message.startswith(FETCH_ERROR_PREFIXES)
+
+
 def build_sync_preview(events: list[dict[str, Any]], limit_days: int = 3) -> list[dict[str, Any]]:
     weekday_names = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag", "Søndag"]
     grouped: list[dict[str, Any]] = []
@@ -57,7 +73,7 @@ def run_initial_sync(
     existing_events = load_json(paths["events_store_path"], [])
     new_events, status_message = fetch_schedule(days_ahead, driver_id)
 
-    if not new_events and not existing_events:
+    if not new_events and (not existing_events or fetch_status_is_error(status_message)):
         raise RuntimeError(status_message)
 
     window_start = date.today().strftime("%Y-%m-%d")
@@ -85,7 +101,7 @@ def run_initial_sync(
     return {
         "events": updated_events,
         "changes": changes,
-        "count": len(updated_events),
+        "count": len(new_events),
         "message": status_message,
         "preview": build_sync_preview(updated_events),
     }

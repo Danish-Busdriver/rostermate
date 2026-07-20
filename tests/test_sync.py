@@ -6,6 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app as app_module
 from app import build_event_from_shift, list_driver_ids, select_next_calendar_events, software_info, sync_schedule
+from sync import fetch_status_is_error, run_initial_sync
 
 
 def test_build_event_from_shift_handles_regular_and_all_day_shifts():
@@ -165,6 +166,37 @@ def test_list_driver_ids_only_returns_configured_numeric_profiles(tmp_path, monk
     (tmp_path / "999" / "settings.json").touch()
 
     assert list_driver_ids() == ["15831"]
+
+
+def test_fetch_status_distinguishes_errors_from_empty_schedule():
+    assert fetch_status_is_error("SelfService-sessionen er udløbet") is True
+    assert fetch_status_is_error("Login mislykkedes - tjek login") is True
+    assert fetch_status_is_error("Ingen vagter fundet i kalenderen - muligvis ingen vagter planlagt") is False
+
+
+def test_initial_sync_does_not_report_old_events_as_new_when_fetch_fails(tmp_path):
+    paths = {
+        "events_store_path": tmp_path / "events.json",
+        "history_path": tmp_path / "history.json",
+        "output_dir": tmp_path,
+    }
+
+    try:
+        run_initial_sync(
+            "15831",
+            {"days_ahead": 7},
+            paths,
+            lambda _days, _driver: ([], "SelfService-sessionen er udløbet"),
+            lambda *args: (args[0], []),
+            lambda *_args: None,
+            lambda _path, _default: [{"id": "old"}],
+            lambda _path: [],
+            lambda *_args: None,
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "SelfService-sessionen er udløbet"
+    else:
+        raise AssertionError("Expected the failed fetch to stop the initial sync")
 
 
 def test_settings_route_persists_selfservice_credentials(tmp_path, monkeypatch):
