@@ -11,3 +11,4 @@ data/
 backups/
 output/
 Caddyfile.local
+rostermate-tray.pid

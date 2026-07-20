@@ -5,15 +5,15 @@ Denne guide indeholder installation, opdatering og teknisk drift af RosterMate p
 ## Systemkrav
 
 - En Mac med internetforbindelse
-- Python 3.12 eller nyere
-- Git
+- macOS 12 eller nyere
 - Adgang til den relevante SelfService-konto
+- Administratoradgang under første installation
 
 ## Anbefalet installation
 
-Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.4.1-macOS.zip`, og pak filen ud.
+Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.5.0-macOS.zip`, og pak filen ud.
 
-Dobbeltklik derefter på `RosterMate.app`. Ved første start klargør appen selv Python-miljøet og browserkomponenten. Når den korrekte RosterMate-version svarer, åbnes opsætningsguiden automatisk. Første start kan tage et par minutter.
+Dobbeltklik derefter på `RosterMate.app`. Ved første start henter appen selv en officiel Python-pakke fra python.org, hvis den mangler, og installerer derefter app-afhængighederne samt Chromium-browseren. macOS beder om administratorgodkendelse, hvis Python skal installeres. Når den korrekte RosterMate-version svarer, åbnes opsætningsguiden automatisk. Første start kan tage et par minutter.
 
 Terminalinstallation er et alternativ:
 
@@ -27,7 +27,7 @@ chmod +x install.command run.command
 ./run.command
 ```
 
-Installationsscriptet opretter et virtuelt Python-miljø, installerer afhængighederne og Chromium-browseren til SelfService samt klargør den lokale konfiguration.
+Installationsscriptet henter om nødvendigt Python, opretter et virtuelt miljø, installerer afhængighederne og Chromium-browseren til SelfService samt klargør den lokale konfiguration.
 
 Åbn derefter:
 
@@ -39,7 +39,7 @@ Følg opsætningsguiden i browseren for at oprette en chaufførprofil og forbind
 
 ## Start via macOS-app
 
-Repositoryet indeholder `RosterMate.app`. App-bundlen installerer manglende komponenter, stopper en eventuel forældet RosterMate-proces på port 8080 og åbner først brugerfladen, når den aktuelle version har bestået sit health-check. En installation uden profiler sendes derfor direkte til opsætningsguiden. macOS kan ved første start bede om tilladelse til at åbne en app fra en ukendt udvikler.
+Repositoryet indeholder `RosterMate.app`. App-bundlen installerer manglende komponenter, stopper en eventuel forældet RosterMate-proces på port 8080 og åbner først brugerfladen, når den aktuelle version har bestået sit health-check. En installation uden profiler sendes derfor direkte til opsætningsguiden. Mens RosterMate kører, vises logoet i menulinjen med genveje til at åbne eller afslutte appen. macOS kan ved første start bede om tilladelse til at åbne en app fra en ukendt udvikler.
 
 Projektet er endnu ikke distribueret som en signeret eller notariseret `.pkg`-installation.
 
@@ -132,7 +132,7 @@ Hver chaufførprofil opbevarer egne indstillinger, sessioner, kalenderfiler, his
 
 ## Fejlfinding
 
-- Kontrollér at Python 3.12+ er installeret.
+- Kontrollér internetforbindelsen, hvis Python eller Chromium ikke kan hentes automatisk.
 - Kør `./install.command` igen efter ændringer i `requirements.txt`.
 - Kontrollér at port 8080 ikke bruges af et andet program.
 - Forbind SelfService igen, hvis den gemte session ikke længere kan genautentificeres.

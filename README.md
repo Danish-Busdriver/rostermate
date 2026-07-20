@@ -36,6 +36,8 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 - Opbevare SelfService-session og kalenderdata lokalt
 - Køre den samme GUI og synkroniseringsmotor på macOS og Windows
 - Klargøre en ny Mac-installation automatisk og åbne opsætningsguiden ved første start
+- Hente Python, app-afhængigheder og SelfService-browseren automatisk under installationen
+- Vise RosterMate-logoet i Mac-menulinjen eller Windows-systembakken, mens appen kører
 
 ## Sådan virker det
 
@@ -96,8 +98,8 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 
 ## Installation
 
-- [Download RosterMate til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.4.1-macOS.zip)
-- [Download RosterMate Setup.exe til Windows (beta)](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.4.1-Windows-Setup.exe)
+- [Download RosterMate til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.5.0-macOS.zip)
+- [Download RosterMate Setup.exe til Windows (beta)](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.5.0-Windows-Setup.exe)
 
 Har du brug for hjælp, finder du de separate vejledninger til [macOS](docs/INSTALL_MACOS.md) og [Windows](docs/INSTALL_WINDOWS.md).
 

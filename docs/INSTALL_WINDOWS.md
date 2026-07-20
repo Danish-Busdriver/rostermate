@@ -5,25 +5,21 @@ Windows-udgaven bruger samme dashboard, SelfService-synkronisering, profiler, hi
 ## Systemkrav
 
 - Windows 10 eller Windows 11
-- Python 3.12 eller nyere fra [python.org](https://www.python.org/downloads/windows/)
-- Git for Windows
 - Internetforbindelse under installationen
 - Adgang til den relevante SelfService-konto
 
-Markér **Add Python to PATH**, når Python installeres. Python Launcher `py.exe` skal være tilgængelig.
-
 ## Anbefalet installation
 
-1. Download `RosterMate-1.4.1-Windows-Setup.exe` fra den seneste GitHub Release.
+1. Download `RosterMate-1.5.0-Windows-Setup.exe` fra den seneste GitHub Release.
 2. Dobbeltklik på installationsfilen.
 3. Vælg eventuelt en skrivebordsgenvej og gennemfør guiden.
-4. Lad installationsprogrammet installere RosterMates Python-afhængigheder og Chromium.
+4. Lad installationsprogrammet hente Python, RosterMates afhængigheder og Chromium.
 
 Installationsprogrammet placerer som standard appen under `%LOCALAPPDATA%\Programs\RosterMate`, opretter en Start-menu-genvej og registrerer en normal Windows-afinstallation.
 
 Setup.exe-installationen:
 
-- kontrollerer Python-versionen
+- henter og installerer Python for den aktuelle bruger, hvis det mangler
 - opretter `.venv`
 - installerer Python-afhængigheder
 - installerer Chromium til SelfService-login
@@ -48,6 +44,8 @@ Startscriptet kontrollerer GitHub-opdateringer, afviser en eventuel forældet Ro
 ```text
 http://127.0.0.1:8080
 ```
+
+Mens appen kører, vises RosterMate-logoet i Windows-systembakken. Højreklik på ikonet for at åbne dashboardet eller afslutte RosterMate. Start-menu- og skrivebordsgenveje bruger det samme logo.
 
 Logfiler gemmes under:
 

@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "1.4.1"
+  #define AppVersion "1.5.0"
 #endif
 
 #define AppName "RosterMate"
@@ -32,6 +32,7 @@ VersionInfoCompany={#AppPublisher}
 VersionInfoDescription=RosterMate installation
 VersionInfoProductName={#AppName}
 VersionInfoProductVersion={#AppVersion}
+SetupIconFile=..\..\assets\RosterMate.ico
 
 [Languages]
 Name: "danish"; MessagesFile: "compiler:Languages\Danish.isl"
@@ -40,8 +41,8 @@ Name: "danish"; MessagesFile: "compiler:Languages\Danish.isl"
 Source: "..\..\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: ".venv\*;data\*;output\*;backups\*;.pytest_cache\*;.env;*.pyc;__pycache__\*;dist\*"
 
 [Icons]
-Name: "{autoprograms}\RosterMate"; Filename: "{app}\run-windows.cmd"; WorkingDir: "{app}"
-Name: "{userdesktop}\RosterMate"; Filename: "{app}\run-windows.cmd"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autoprograms}\RosterMate"; Filename: "{app}\run-windows.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\assets\RosterMate.ico"
+Name: "{userdesktop}\RosterMate"; Filename: "{app}\run-windows.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\assets\RosterMate.ico"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Opret en genvej på skrivebordet"; GroupDescription: "Ekstra genveje:"; Flags: unchecked
@@ -53,13 +54,3 @@ Filename: "{app}\run-windows.cmd"; Description: "Start RosterMate"; WorkingDir: 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\.venv"
 Type: files; Name: "{app}\.env"
-
-[Code]
-function PrepareToInstall(var NeedsRestart: Boolean): String;
-var
-  ResultCode: Integer;
-begin
-  Result := '';
-  if not Exec('py.exe', '-3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
-    Result := 'RosterMate kræver Python 3.12 eller nyere. Installer Python fra python.org, markér Add Python to PATH, og start derefter installationen igen.';
-end;

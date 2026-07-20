@@ -85,11 +85,13 @@ def test_windows_distribution_files_are_present():
     installer = (project_root / "install-windows.ps1").read_text(encoding="utf-8")
     launcher = (project_root / "run-windows.ps1").read_text(encoding="utf-8")
     assert "playwright install chromium" in installer
+    assert "python.org/ftp/python" in installer
     assert 'Join-Path $env:LOCALAPPDATA "RosterMate"' in installer
     assert '"RosterMate.lnk"' in installer
     assert "auto_update.py" in launcher
     assert 'Invoke-WebRequest -UseBasicParsing -Uri "$AppUrl/health"' in launcher
     assert "$HealthData.version -eq $ExpectedVersion" in launcher
+    assert "Start-RosterMateTray" in launcher
 
 
 def test_windows_exe_installer_definition_is_present():
@@ -103,6 +105,8 @@ def test_windows_exe_installer_definition_is_present():
     assert "[UninstallDelete]" in installer
     assert "ISCC.exe" in workflow
     assert "actions/upload-artifact@v4" in workflow
+    assert "SetupIconFile=" in installer
+    assert "RosterMate.ico" in installer
 
 
 def test_macos_app_bootstraps_first_install_and_checks_version():
@@ -113,3 +117,14 @@ def test_macos_app_bootstraps_first_install_and_checks_version():
     assert "EXPECTED_VERSION=" in launcher
     assert 'curl -fsS "http://127.0.0.1:8080/health"' in launcher
     assert "Første installation kan tage et par minutter" in launcher
+    assert "tray.py" in launcher
+
+
+def test_shared_tray_uses_the_rostermate_logo_and_expected_actions():
+    project_root = Path(__file__).resolve().parents[1]
+    tray = (project_root / "tray.py").read_text(encoding="utf-8")
+
+    assert '"static" / "Rostermate.png"' in tray
+    assert "Åbn RosterMate" in tray
+    assert "Afslut RosterMate" in tray
+    assert (project_root / "assets" / "RosterMate.ico").is_file()
