@@ -2,306 +2,94 @@
   <img src="assets/logo.png" width="180" alt="RosterMate logo">
 </p>
 
-<h1 align="center">
-🚌 RosterMate
-</h1>
+<h1 align="center">RosterMate</h1>
 
 <p align="center">
-Et lokalt macOS-projekt til at hjælpe buschauffører med at holde styr på vagter, ændringer og historik.
+  Din vagtplan fra SelfService – automatisk samlet, opdateret og klar i kalenderen.
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-blue" alt="macOS">
-  <img src="https://img.shields.io/badge/python-3.12%2B-green" alt="Python 3.12+">
-  <img src="https://img.shields.io/badge/flask-3.x-blue" alt="Flask">
+  <img src="https://img.shields.io/badge/status-aktiv%20udvikling-orange" alt="Aktiv udvikling">
   <img src="https://img.shields.io/badge/license-MIT-red" alt="MIT license">
 </p>
 
----
+## Mere overblik – mindre manuelt arbejde
 
-# Om projektet
+RosterMate er skabt til buschauffører, der vil have deres vagter ud af SelfService og ind i en overskuelig kalender. Appen kører lokalt på din computer, holder styr på ændringer og samler de vigtigste oplysninger på ét enkelt dashboard.
 
-RosterMate er et simpelt og stabilt værktøj til at håndtere buschaufførers vagter.
+Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder og kontrollere kalenderen igen og igen. RosterMate henter planen, gemmer historikken og opdaterer kalenderfilen for dig.
 
-Opsætningsguidens præferenceside viser den hentede vagtoversigt direkte efter den første synkronisering.
-Når guiden færdiggøres, fortsætter den direkte til dashboardet uden at genstarte den aktive lokale server.
-Kalenderfilen eksporterer tidsbestemte vagter som RFC 5545-kompatible UTC-tidspunkter og heldagsvagter som datoer, så Apple Kalender kan vise begge typer korrekt.
-SelfService-synkronisering navigerer automatisk gennem alle kalendermåneder, som dækkes af det valgte antal dage, og bruger Tides fulde dato på hver kalendercelle.
+## Det kan RosterMate
 
-Google Calendar kræver en OAuth-klient af typen **Web application**. Aktivér Google Calendar API, konfigurér OAuth-samtykkeskærmen, og registrér den redirect-URI, som vises i RosterMate. Det fulde Client ID slutter med `.apps.googleusercontent.com`; RosterMate afviser ugyldige ID'er lokalt, før Google-login åbnes.
+- Hente vagter direkte fra SelfService
+- Synkronisere på tværs af månedsskift
+- Vise de næste syv kalenderposter på dashboardet
+- Eksportere vagter til Apple Kalender og andre ICS-kompatible kalendere
+- Dele kalenderen lokalt, på samme Wi-Fi eller via en valgfri offentlig HTTPS-adresse
+- Synkronisere direkte til Google Calendar
+- Registrere ændringer og gemme historik
+- Holde flere chaufførprofiler adskilt
+- Opdatere softwaren automatisk fra den stabile GitHub-version
+- Opbevare SelfService-session og kalenderdata lokalt
 
-Dashboardet viser altid tre adskilte kalenderadresser, når de er konfigureret: `127.0.0.1` til denne Mac, Mac'ens lokale IP til en iPhone på samme Wi-Fi og en valgfri offentlig HTTPS-adresse. Netværksadresserne er tokenbeskyttede, mens dashboard, indstillinger og login ikke offentliggøres. Den lokale adresse kan om nødvendigt styres med `ROSTERMATE_LAN_HOST`.
+## Sådan virker det
 
-En offentlig HTTPS-adresse kan gemmes som `calendar_public_base_url` i chaufførens lokale indstillinger. Kopiér `Caddyfile.example` til den Git-ignorerede `Caddyfile.local`, og indsæt eget domæne og chaufførnummer. Proxyen offentliggør kun den valgte kalendersti; alle andre offentlige stier returnerer 404. Videresend ekstern TCP 80 til Mac-port 8081 og ekstern TCP 443 til Mac-port 8443.
+1. Åbn opsætningsguiden og forbind til SelfService.
+2. Vælg hvor langt frem RosterMate skal hente vagter.
+3. RosterMate synkroniserer planen og opdaterer dashboard, historik og kalenderfil.
+4. Abonnér på kalenderen fra din Mac, iPhone eller en anden kalenderapp.
 
-Projektet er bygget som en lokal macOS-webapp i Python og Flask, så det kan udvikles og bruges uden at kræve en cloud-løsning. Formålet er at gøre det lettere at:
-
-- importere vagtplaner
-- sammenligne gamle og nye planer
-- registrere ændringer
-- gemme historik
-- få et overskueligt dashboard
-- lave sikkerhedskopier af data
-
-Dette er et tidligt, men solidt fundament til en senere macOS-app med flere funktioner.
-
----
-
-# Nuværende funktioner
-
-- Dashboard til visning af importerede vagter
-- Dashboardets liste “De næste 7 kalenderposter” viser kun poster fra dags dato og frem, sorteret efter dato og starttid
-- Dashboardet viser softwareversion, Git-commit og datoen for seneste softwareopdatering
-- Kalenderlinket følger den aktive chaufførprofil, f.eks. `/12345/calendar.ics`
-- Guidet førstegangsopsætning og separate chaufførprofiler
-- Automatisk viderestilling, når der kun findes én profil; profilvælgeren vises først ved flere profiler
-- SelfService-login med lokalt gemt browsersession
-- SelfService-login håndterer Tide/SSO-viderestillinger uden at afbryde forbindelsen, mens siden navigerer
-- Synkronisering og forbindelsestest genbruger chaufførens vedvarende browserprofil, så Tide-sessionen bevares efter login
-- Tide-fanens `sessionStorage` gemmes lokalt pr. chauffør og gendannes ved synkronisering, fordi login ellers udløber, når browserfanen lukkes
-- Udløbne Tide-websessioner genautentificeres automatisk med lokalt gemte loginoplysninger, og gamle kalenderposter tælles ikke som nye fund
-- Google Kalender-integration og ICS-eksport
-- Import af planer via JSON
-- Sammenligning af gamle og nye planer
-- Registrering af ændringer i historik
-- Backup af historikdata
-- Lokal webserver på localhost
-- Enkel synkronisering med SelfService-oplysninger
-- Enkle tests for kernefunktioner
-
----
-
-# Teknologi
-
-- Python 3.12+
-- Flask
-- HTML
-- CSS
-- JavaScript
-- JSON
-- pytest
-- Git and GitHub
-
----
-
-# Installation
-
-## Hurtigstart på macOS (anbefalet)
-
-Hele installationen klares via to shell-scripts som følger med repoet:
-
-```bash
-# 1. Klon repository (henter alle filer inklusive install-scripts)
-git clone https://github.com/Danish-Busdriver/rostermate.git
-cd rostermate
-
-# 2. Gør scripts executable
-chmod +x install.command run.command
-
-# 3. Kør installation
-./install.command
-
-# 4. Start appen
-./run.command
-```
-
-**Det er alt der skal til!** Scriptene håndterer:
-- Oprettelse af virtuelt Python-miljø
-- Installation af alle afhængigheder
-- Opsætning af .env fra skabelonen
-- Start af webserveren lokalt
-
-Når det er færdigt åbnes appen automatisk på:
-```
-http://127.0.0.1:8080
-```
-
-## Automatiske opdateringer
-
-Når RosterMate startes via `run.command` eller macOS-appens launcher, checker den automatisk den aktuelle branches tracking-branch på GitHub. En opdatering installeres kun, når den kan anvendes som en sikker fast-forward, og når der ikke findes lokale ændringer i trackede kodefiler.
-
-Hvis GitHub ikke kan nås, eller den lokale branch er ændret, starter den eksisterende installation uden at overskrive noget. Hvis `requirements.txt` ændres under opdateringen, installeres de nye Python-afhængigheder automatisk.
-
-Automatisk opdatering kan springes over for en enkelt start:
-
-```bash
-ROSTERMATE_SKIP_UPDATE=1 ./run.command
-```
-
-Manuel opdatering kan stadig køres fra projektmappen:
-
-```bash
-git pull --ff-only
-./install.command
-```
-
-`git pull --ff-only` henter kun en opdatering, når den kan anvendes uden at overskrive lokale commits. `install.command` opdaterer derefter Python-afhængighederne.
-
-## Manuel installation (hvis scripts ikke virker)
-
-Hvis shell-scripts ikke virker på dit system, kan du installere manuelt:
-
-### 1. Klon repository
-
-```bash
-git clone https://github.com/Danish-Busdriver/rostermate.git
-cd rostermate
-```
-
-### 2. Opret et virtuelt miljø
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-### 3. Installer afhængigheder
-
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Opret en lokal .env-fil
-
-```bash
-cp .env.example .env
-```
-
-Rediger derefter .env og indsæt dine SelfService-oplysninger, hvis du vil bruge synkronisering.
-
-### 5. Start appen
-
-```bash
-python3 app.py
-```
-
-Åbn derefter:
-
-```text
-http://127.0.0.1:8080
-```
-
----
-
-# Kør tests
-
-```bash
-pytest -q
-```
-
----
-
-# Projektstruktur
-
-```text
-.
-├── app.py
-├── requirements.txt
-├── README.md
-├── LICENSE
-├── .gitignore
-├── .env.example
-├── install.command
-├── run.command
-├── assets/
-│   ├── logo.png
-│   └── screenshots/
-├── docs/
-│   ├── BETA_WORKFLOW.md
-│   └── BEGINNER_WORKFLOW.md
-├── static/
-├── tests/
-│   ├── test_sync.py
-│   └── test_wizard.py
-├── wizard.py
-├── sync.py
-├── login.py
-├── session.py
-├── settings.py
-├── dashboard.py
-├── launch_agent.py
-└── RosterMate.app/
-```
-
----
-
-# Screenshots
-
-Her er billeder af den aktuelle opsætningsguide og dashboardet i RosterMate:
+## Screenshots
 
 ### Opsætningsguide
 
-![Opsætningsguide](assets/screenshots/setup-guide.png)
+[![RosterMate opsætningsguide](assets/screenshots/setup-guide.png)](assets/screenshots/setup-guide.png)
 
 ### Dashboard
 
-[![Dashboard med de næste 7 kalenderposter](assets/screenshots/dashboard.png)](assets/screenshots/dashboard.png)
+[![RosterMate dashboard](assets/screenshots/dashboard.png)](assets/screenshots/dashboard.png)
 
-### Oversigt over vagter
+### Vagtoversigt
 
-[![Oversigt](assets/screenshots/overview.png)](assets/screenshots/overview.png)
+[![RosterMate vagtoversigt](assets/screenshots/overview.png)](assets/screenshots/overview.png)
 
----
+## Roadmap
 
-# Release-flow og beta-test
+### Tilgængeligt nu
 
-For at gøre det enkelt og stabilt anbefaler jeg denne opsætning:
+- [x] Guidet SelfService-login
+- [x] Automatisk genlogin og synkronisering
+- [x] Synkronisering på tværs af kalendermåneder
+- [x] Dashboard med kommende vagter
+- [x] ICS-eksport til kalenderapps
+- [x] Lokal, netværksbaseret og tokenbeskyttet kalenderdeling
+- [x] Historik, ændringsregistrering og backup
+- [x] Separate chaufførprofiler
+- [x] Automatiske softwareopdateringer
 
-- main: stabil version til andre brugere
-- beta: din egen test-version
+### Næste versioner
 
-Det betyder, at du tester nye ændringer i beta først, og først når de virker, flytter du dem til main.
+- [ ] Enklere Google-login uden synlige tekniske OAuth-felter
+- [ ] Menu-bar-app til macOS
+- [ ] Notifikationer ved ændrede vagter
+- [ ] Forbedret release- og backupflow
+- [ ] Signeret macOS-installationspakke
 
-Se mere i [docs/BETA_WORKFLOW.md](docs/BETA_WORKFLOW.md) og [docs/BEGINNER_WORKFLOW.md](docs/BEGINNER_WORKFLOW.md).
+### På længere sigt
 
----
+- [ ] Windows-version
+- [ ] Mere fleksibel kalenderdeling uden krav om en tændt hjemmecomputer
+- [ ] Flere SelfService-varianter og arbejdspladser
+- [ ] Mobilvenlig status- og opsætningsside
 
-# Roadmap
+## Installation
 
-## Version 1.0
+- [Installation på macOS](docs/INSTALL_MACOS.md)
+- [Planlagt installation på Windows](docs/INSTALL_WINDOWS.md)
 
-- [x] Import af vagtplan
-- [x] Sammenligning af vagter
-- [x] Dashboard
-- [x] Historik
-- [x] Backup
-- [x] Lokal webserver
+## Projektet
 
-## Version 1.1
+RosterMate er et open source-projekt under MIT-licensen. Projektet er udviklet af Daniel Pullen – buschauffør, disponent og software-entusiast.
 
-- [ ] GitHub integration
-- [x] Automatiske opdateringer
-- [ ] Release-system
-- [ ] Backup før opdatering
-
-## Version 1.2
-
-- [x] Native macOS-app bundle
-- [x] Dock icon
-- [ ] Menu bar
-- [ ] Notifikationer
-- [ ] Launch at login
-
----
-
-# Bidrag
-
-Projektet er tænkt som et stabilt open source-projekt. Små, veldefinerede ændringer foretrækkes frem for store omskrivninger.
-
-Hvis du vil bidrage, er det bedst at starte med en lille forbedring og beskrive ændringen tydeligt.
-
----
-
-# Licens
-
-Dette projekt er licenseret under MIT-licensen.
-
----
-
-# Udviklet af
-
-Daniel Pullen
-
-Buschauffør • Disponent • Software-entusiast
-
-GitHub: https://github.com/Danish-Busdriver
+[GitHub-profil](https://github.com/Danish-Busdriver) · [Licens](LICENSE)
