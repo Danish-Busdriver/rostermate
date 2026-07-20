@@ -3,12 +3,20 @@ from __future__ import annotations
 from typing import Any
 
 
+def google_calendar_display_name(value: Any) -> str:
+    """Return a readable name and migrate calendar IDs accidentally stored as names."""
+    name = str(value or "").strip()
+    if not name or ("@" in name and " " not in name) or name == "primary":
+        return "RosterMate"
+    return name
+
+
 def with_setup_defaults(settings: dict[str, Any]) -> dict[str, Any]:
     keep_old_shifts = not bool(settings.get("remove_old_shifts", False))
     return {
         **settings,
         "calendar_name": settings.get("calendar_name", "RosterMate"),
-        "google_calendar_name": settings.get("google_calendar_name", "RosterMate"),
+        "google_calendar_name": google_calendar_display_name(settings.get("google_calendar_name")),
         "keep_old_shifts": settings.get("keep_old_shifts", keep_old_shifts),
         "launch_at_login": settings.get("launch_at_login", False),
         "show_menu_bar_icon": settings.get("show_menu_bar_icon", True),
