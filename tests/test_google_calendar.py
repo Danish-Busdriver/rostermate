@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app as app_module
+from settings import google_calendar_display_name
 
 
 class _Result:
@@ -41,6 +42,12 @@ class _CalendarService:
 
     def calendars(self):
         return self.calendar_resource
+
+
+def test_legacy_google_calendar_id_is_not_shown_as_the_calendar_name():
+    assert google_calendar_display_name("abc123@group.calendar.google.com") == "RosterMate"
+    assert google_calendar_display_name("primary") == "RosterMate"
+    assert google_calendar_display_name("Mine vagter") == "Mine vagter"
 
 
 def test_google_calendar_is_created_with_editable_default_name():

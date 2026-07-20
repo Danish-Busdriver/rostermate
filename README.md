@@ -28,7 +28,7 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 - Vise de næste syv forskellige kalenderdage på dashboardet
 - Eksportere vagter til Apple Kalender og andre ICS-kompatible kalendere
 - Dele kalenderen lokalt, på samme Wi-Fi eller via en valgfri offentlig HTTPS-adresse
-- Logge ind med Google og automatisk oprette en separat kalender med valgfrit navn
+- Logge ind med Google og automatisk oprette eller genbruge en separat kalender med valgfrit navn
 - Registrere ændringer og gemme historik
 - Holde flere chaufførprofiler adskilt
 - Opdatere softwaren automatisk fra den stabile GitHub-version
