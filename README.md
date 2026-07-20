@@ -39,6 +39,10 @@ Dette er et tidligt, men solidt fundament til en senere macOS-app med flere funk
 # Nuværende funktioner
 
 - Dashboard til visning af importerede vagter
+- Dashboardets liste “De næste 7 kalenderposter” viser kun poster fra dags dato og frem, sorteret efter dato og starttid
+- Guidet førstegangsopsætning og separate chaufførprofiler
+- SelfService-login med lokalt gemt browsersession
+- Google Kalender-integration og ICS-eksport
 - Import af planer via JSON
 - Sammenligning af gamle og nye planer
 - Registrering af ændringer i historik
@@ -93,6 +97,27 @@ Når det er færdigt åbnes appen automatisk på:
 ```
 http://127.0.0.1:8080
 ```
+
+## Automatiske opdateringer
+
+Når RosterMate startes via `run.command` eller macOS-appens launcher, checker den automatisk den aktuelle branches tracking-branch på GitHub. En opdatering installeres kun, når den kan anvendes som en sikker fast-forward, og når der ikke findes lokale ændringer i trackede kodefiler.
+
+Hvis GitHub ikke kan nås, eller den lokale branch er ændret, starter den eksisterende installation uden at overskrive noget. Hvis `requirements.txt` ændres under opdateringen, installeres de nye Python-afhængigheder automatisk.
+
+Automatisk opdatering kan springes over for en enkelt start:
+
+```bash
+ROSTERMATE_SKIP_UPDATE=1 ./run.command
+```
+
+Manuel opdatering kan stadig køres fra projektmappen:
+
+```bash
+git pull --ff-only
+./install.command
+```
+
+`git pull --ff-only` henter kun en opdatering, når den kan anvendes uden at overskrive lokale commits. `install.command` opdaterer derefter Python-afhængighederne.
 
 ## Manuel installation (hvis scripts ikke virker)
 
@@ -168,7 +193,15 @@ pytest -q
 │   └── BEGINNER_WORKFLOW.md
 ├── static/
 ├── tests/
-│   └── test_sync.py
+│   ├── test_sync.py
+│   └── test_wizard.py
+├── wizard.py
+├── sync.py
+├── login.py
+├── session.py
+├── settings.py
+├── dashboard.py
+├── launch_agent.py
 └── RosterMate.app/
 ```
 
@@ -176,19 +209,19 @@ pytest -q
 
 # Screenshots
 
-Her er et par billeder af dashboardet og appens visuelle profil:
+Her er billeder af den aktuelle opsætningsguide og dashboardet i RosterMate:
 
-# Screenshots
+### Opsætningsguide
 
-Her er billeder af dashboardet i RosterMate:
+![Opsætningsguide](assets/screenshots/setup-guide.png)
 
 ### Dashboard
 
-[![Dashboard](https://github.com/Danish-Busdriver/rostermate/raw/main/assets/screenshots/dashboard.png)](https://github.com/Danish-Busdriver/rostermate/blob/main/assets/screenshots/dashboard.png)
+[![Dashboard med de næste 7 kalenderposter](assets/screenshots/dashboard.png)](assets/screenshots/dashboard.png)
 
 ### Oversigt over vagter
 
-[![Oversigt](https://github.com/Danish-Busdriver/rostermate/raw/main/assets/screenshots/overview.png)](https://github.com/Danish-Busdriver/rostermate/blob/main/assets/screenshots/overview.png)
+[![Oversigt](assets/screenshots/overview.png)](assets/screenshots/overview.png)
 
 ---
 
@@ -219,7 +252,7 @@ Se mere i [docs/BETA_WORKFLOW.md](docs/BETA_WORKFLOW.md) og [docs/BEGINNER_WORKF
 ## Version 1.1
 
 - [ ] GitHub integration
-- [ ] Automatiske opdateringer
+- [x] Automatiske opdateringer
 - [ ] Release-system
 - [ ] Backup før opdatering
 

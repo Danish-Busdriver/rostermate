@@ -10,4 +10,5 @@ if [ ! -d ".venv" ]; then
 fi
 
 source .venv/bin/activate
+python3 auto_update.py
 python3 app.py
