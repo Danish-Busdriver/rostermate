@@ -38,7 +38,7 @@ SetupIconFile=..\..\assets\RosterMate.ico
 Name: "danish"; MessagesFile: "compiler:Languages\Danish.isl"
 
 [Files]
-Source: "..\..\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: ".venv\*;data\*;output\*;backups\*;.pytest_cache\*;.env;*.pyc;__pycache__\*;dist\*;.git\*;.github\*;tests\*;installer\*;RosterMate.app\*;install.command;run.command;uninstall.command;build-macos-pkg.command;docs\INSTALL_MACOS.md;AGENTS.md"
+Source: "..\..\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs; Excludes: ".venv\*;data\*;output\*;backups\*;.pytest_cache\*;.env;*.pyc;__pycache__\*;dist\*;.git\*;.github\*;tests\*;installer\*;RosterMate.app\*;install.command;run.command;uninstall.command;build-macos-pkg.command;docs\INSTALL_MACOS.md;AGENTS.md"
 
 [Icons]
 Name: "{autoprograms}\RosterMate"; Filename: "{app}\run-windows.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\assets\RosterMate.ico"
