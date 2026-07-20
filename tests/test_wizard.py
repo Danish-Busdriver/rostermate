@@ -5,6 +5,53 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app as app_module
 import launch_agent as launch_agent_module
+from login import read_stable_page_content
+
+
+class NavigatingPage:
+    def __init__(self, failures: int) -> None:
+        self.failures = failures
+        self.load_waits = 0
+
+    def content(self) -> str:
+        if self.failures:
+            self.failures -= 1
+            raise RuntimeError("Page.content: Unable to retrieve content because the page is navigating and changing the content.")
+        return "<html>Assignments</html>"
+
+    def wait_for_load_state(self, *_args, **_kwargs) -> None:
+        self.load_waits += 1
+
+    def wait_for_timeout(self, _milliseconds: int) -> None:
+        pass
+
+
+def test_read_stable_page_content_retries_during_navigation():
+    page = NavigatingPage(failures=2)
+
+    html = read_stable_page_content(page)
+
+    assert html == "<html>Assignments</html>"
+    assert page.load_waits == 2
+
+
+def test_read_stable_page_content_returns_none_when_navigation_does_not_settle():
+    page = NavigatingPage(failures=10)
+
+    assert read_stable_page_content(page, attempts=3) is None
+
+
+def test_read_stable_page_content_reraises_non_navigation_errors():
+    class BrokenPage(NavigatingPage):
+        def content(self) -> str:
+            raise RuntimeError("Browser process closed")
+
+    try:
+        read_stable_page_content(BrokenPage(failures=0))
+    except RuntimeError as exc:
+        assert str(exc) == "Browser process closed"
+    else:
+        raise AssertionError("Expected the non-navigation error to be re-raised")
 
 
 def test_wizard_test_connection_route_returns_error_without_session(tmp_path, monkeypatch):
