@@ -28,7 +28,7 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 - Vise de næste syv forskellige kalenderdage på dashboardet
 - Eksportere vagter til Apple Kalender og andre ICS-kompatible kalendere
 - Dele kalenderen lokalt, på samme Wi-Fi eller via en valgfri offentlig HTTPS-adresse
-- Synkronisere direkte til Google Calendar
+- Logge ind med Google og automatisk oprette en separat kalender med valgfrit navn
 - Registrere ændringer og gemme historik
 - Holde flere chaufførprofiler adskilt
 - Opdatere softwaren automatisk fra den stabile GitHub-version
@@ -56,6 +56,10 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 
 [![RosterMate vagtoversigt](assets/screenshots/overview.png)](assets/screenshots/overview.png)
 
+### Google Calendar
+
+[![RosterMate Google Calendar-opsætning](assets/screenshots/google-calendar.png)](assets/screenshots/google-calendar.png)
+
 ## Roadmap
 
 ### Tilgængeligt nu
@@ -70,10 +74,10 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 - [x] Separate chaufførprofiler
 - [x] Automatiske softwareopdateringer
 - [x] Windows-beta med installation, start og autostart
+- [x] Google-login med automatisk oprettelse og navngivning af en separat kalender
 
 ### Næste versioner
 
-- [ ] Enklere Google-login uden synlige tekniske OAuth-felter
 - [ ] Menu-bar-app til macOS
 - [ ] Notifikationer ved ændrede vagter
 - [ ] Forbedret release- og backupflow
