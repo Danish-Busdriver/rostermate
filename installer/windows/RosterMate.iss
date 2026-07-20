@@ -38,7 +38,16 @@ SetupIconFile=..\..\assets\RosterMate.ico
 Name: "danish"; MessagesFile: "compiler:Languages\Danish.isl"
 
 [Files]
-Source: "..\..\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs; Excludes: ".venv\*;data\*;output\*;backups\*;.pytest_cache\*;.env;*.pyc;__pycache__\*;dist\*;.git\*;.github\*;tests\*;installer\*;RosterMate.app;RosterMate.app\*;install.command;run.command;uninstall.command;build-macos-pkg.command;docs\INSTALL_MACOS.md;AGENTS.md"
+Source: "..\..\*.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\*-windows.cmd"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\*-windows.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\.env.example"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\requirements.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\README.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\static\*"; DestDir: "{app}\static"; Flags: ignoreversion recursesubdirs
+Source: "..\..\assets\RosterMate.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
+Source: "..\..\docs\INSTALL_WINDOWS.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\RosterMate"; Filename: "{app}\run-windows.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\assets\RosterMate.ico"

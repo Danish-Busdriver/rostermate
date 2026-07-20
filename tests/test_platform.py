@@ -123,8 +123,10 @@ def test_windows_exe_installer_definition_is_present():
     assert "RosterMate.ico" in installer
     assert "Afinstaller RosterMate" in installer
     assert "[UninstallRun]" in installer
-    assert "RosterMate.app\\*" in installer
-    assert "install.command" in installer
+    assert 'Source: "..\\..\\*.py"' in installer
+    assert 'Source: "..\\..\\*-windows.ps1"' in installer
+    assert "RosterMate.app" not in installer
+    assert "install.command" not in installer
 
 
 def test_macos_app_bootstraps_first_install_and_checks_version():
