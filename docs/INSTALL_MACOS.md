@@ -21,7 +21,7 @@ chmod +x install.command run.command
 ./run.command
 ```
 
-Installationsscriptet opretter et virtuelt Python-miljø, installerer afhængighederne og klargør den lokale konfiguration.
+Installationsscriptet opretter et virtuelt Python-miljø, installerer afhængighederne og Chromium-browseren til SelfService samt klargør den lokale konfiguration.
 
 Åbn derefter:
 
@@ -45,6 +45,7 @@ Hvis `install.command` ikke virker:
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -r requirements.txt
+python3 -m playwright install chromium
 cp .env.example .env
 python3 app.py
 ```

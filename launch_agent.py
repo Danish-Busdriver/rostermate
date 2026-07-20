@@ -4,6 +4,7 @@ import os
 import plistlib
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -38,6 +39,42 @@ def _run_launchctl(command: list[str]) -> None:
     if shutil.which("launchctl") is None:
         return
     subprocess.run(command, check=False, capture_output=True, text=True)
+
+
+def windows_task_name(driver_id: str) -> str:
+    return f"RosterMate-{driver_id}"
+
+
+def _run_schtasks(command: list[str]) -> None:
+    if shutil.which("schtasks") is None:
+        return
+    subprocess.run(command, check=False, capture_output=True, text=True)
+
+
+def install_windows_startup(driver_id: str, project_dir: Path) -> Path:
+    run_script = project_dir / "run-windows.ps1"
+    task_command = f'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "{run_script}"'
+    _run_schtasks(
+        [
+            "schtasks",
+            "/Create",
+            "/TN",
+            windows_task_name(driver_id),
+            "/TR",
+            task_command,
+            "/SC",
+            "ONLOGON",
+            "/RL",
+            "LIMITED",
+            "/F",
+        ]
+    )
+    return run_script
+
+
+def remove_windows_startup(driver_id: str, project_dir: Path) -> Path:
+    _run_schtasks(["schtasks", "/Delete", "/TN", windows_task_name(driver_id), "/F"])
+    return project_dir / "run-windows.ps1"
 
 
 def install_launch_agent(
@@ -75,7 +112,13 @@ def sync_launch_agent_preference(
     output_dir: Path,
     home_dir: Path | None = None,
     reload_agent: bool = True,
+    platform_name: str | None = None,
 ) -> Path:
+    active_platform = platform_name or sys.platform
+    if active_platform == "win32":
+        if enabled:
+            return install_windows_startup(driver_id, project_dir)
+        return remove_windows_startup(driver_id, project_dir)
     if enabled:
         return install_launch_agent(driver_id, project_dir, output_dir, home_dir, reload_agent)
     return remove_launch_agent(driver_id, home_dir, reload_agent)

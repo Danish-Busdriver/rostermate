@@ -1,50 +1,127 @@
 # Installation på Windows
 
-RosterMate understøtter endnu ikke Windows som færdig slutbrugerplatform. Denne fil beskriver den planlagte installationsmodel og gør status tydelig, indtil Windows-versionen er klar.
+Windows-udgaven bruger samme dashboard, SelfService-synkronisering, profiler, historik og kalenderfunktioner som macOS-udgaven. Installationsflowet er i beta, fordi det endnu ikke er pakket som en signeret `.exe`- eller `.msi`-installer.
 
-## Status
+## Systemkrav
 
-- Windows-installationsprogram: ikke tilgængeligt endnu
-- Automatisk start med Windows: planlagt
-- Windows-bakkeikon: planlagt
-- SelfService-synkronisering: forventes genbrugt fra den eksisterende Python-kode
-- Dashboard og ICS-eksport: forventes genbrugt fra webbrugerfladen
+- Windows 10 eller Windows 11
+- Python 3.12 eller nyere fra [python.org](https://www.python.org/downloads/windows/)
+- Git for Windows
+- Internetforbindelse under installationen
+- Adgang til den relevante SelfService-konto
 
-De nuværende `.command`-scripts, `RosterMate.app` og LaunchAgent-funktioner er specifikke for macOS.
+Markér **Add Python to PATH**, når Python installeres. Python Launcher `py.exe` skal være tilgængelig.
 
-## Planlagt slutbrugerinstallation
+## Anbefalet installation
 
-Den kommende Windows-version bør leveres som en signeret installer, der:
+Åbn PowerShell og kør:
 
-1. Installerer RosterMate under brugerens lokale programmappe.
-2. Medtager Python-runtime og nødvendige browserkomponenter.
-3. Opretter en genvej i Start-menuen.
-4. Tilbyder automatisk start efter login.
-5. Åbner opsætningsguiden i standardbrowseren.
-6. Holder profiler og kalenderdata adskilt fra programfilerne.
-7. Kan opdateres uden at overskrive brugerens lokale data.
+```powershell
+git clone https://github.com/Danish-Busdriver/rostermate.git
+Set-Location rostermate
+.\install-windows.cmd
+```
 
-## Forventet lokal adresse
+Du kan også dobbeltklikke på `install-windows.cmd` efter repositoryet er downloadet.
 
-Webbrugerfladen forventes fortsat at bruge:
+Installationen:
+
+- kontrollerer Python-versionen
+- opretter `.venv`
+- installerer Python-afhængigheder
+- installerer Chromium til SelfService-login
+- opretter den lokale `.env`-fil
+- opretter datamappen under `%LOCALAPPDATA%\RosterMate`
+- opretter en RosterMate-genvej i Start-menuen
+
+## Start RosterMate
+
+Dobbeltklik på:
+
+```text
+run-windows.cmd
+```
+
+Startscriptet kontrollerer GitHub-opdateringer, starter serveren skjult, venter på health-check og åbner derefter:
 
 ```text
 http://127.0.0.1:8080
 ```
 
-ICS-kalenderen vil derfor kunne bruges af kalenderapps på samme Windows-computer. Netværksdeling skal have samme tokenbeskyttelse som macOS-versionen.
+Logfiler gemmes under:
 
-## Arbejde før første Windows-release
+```text
+%LOCALAPPDATA%\RosterMate\logs
+```
 
-- Erstat macOS LaunchAgent med Windows Task Scheduler eller en Windows Service
-- Erstat `.command`-scripts med PowerShell og en rigtig installer
-- Fastlæg placering af indstillinger under `%LOCALAPPDATA%`
-- Pak Playwright-browser og Python-runtime
-- Test login, automatisk genlogin og månedsskift på Windows
-- Tilføj Windows-specifik firewallkonfiguration
-- Signér installer og programfiler
-- Opret Windows-tests og installationsscreenshots
+## Første opsætning
 
-## Udviklere
+Opsætningsguiden er den samme som på macOS:
 
-Kildekoden kan muligvis startes manuelt på Windows allerede nu, men dette er ikke et understøttet installationsflow. En udviklerinstallation må ikke præsenteres som en færdig Windows-version, før ovenstående punkter er implementeret og testet.
+1. Opret chaufførprofilen.
+2. Forbind til SelfService i browser-vinduet.
+3. Vælg synkroniseringsperiode og kalenderindstillinger.
+4. Færdiggør guiden og kontrollér de kommende vagter på dashboardet.
+
+## Automatisk start med Windows
+
+Når **Start automatisk ved login** aktiveres, opretter RosterMate en begrænset brugeropgave i Windows Task Scheduler med navnet:
+
+```text
+RosterMate-<chaufførnummer>
+```
+
+Opgaven starter `run-windows.ps1` efter brugerlogin. Deaktiveres indstillingen, fjernes opgaven igen.
+
+## Lokale data
+
+Windows gemmer brugerdata uden for Git-repositoryet:
+
+```text
+%LOCALAPPDATA%\RosterMate\data
+%LOCALAPPDATA%\RosterMate\output
+%LOCALAPPDATA%\RosterMate\backups
+```
+
+Placeringen kan tilsidesættes med miljøvariablen `ROSTERMATE_HOME` på både Windows og macOS.
+
+## Kalenderdeling
+
+- `127.0.0.1` virker på samme Windows-computer.
+- Den lokale IP kan bruges af enheder på samme netværk.
+- En offentlig HTTPS-adresse kræver domæne, TLS-proxy og router-/tunnelopsætning.
+
+Windows Firewall kan spørge, om Python må modtage trafik. Tillad kun private netværk, medmindre en afgrænset HTTPS-proxy er konfigureret.
+
+## Automatiske opdateringer
+
+Windows bruger den samme sikre fast-forward-opdatering som macOS. Lokale ændringer i trackede kodefiler bliver ikke overskrevet.
+
+Spring opdateringen over for én start:
+
+```powershell
+$env:ROSTERMATE_SKIP_UPDATE = "1"
+.\run-windows.cmd
+```
+
+## Test
+
+Kør den platformfælles testpakke:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+## Kendte beta-begrænsninger
+
+- Installationen er endnu ikke signeret eller pakket som `.exe`/`.msi`.
+- Der er endnu ikke et Windows-bakkeikon.
+- SmartScreen kan advare om de lokale scripts.
+- Windows-scripts og Task Scheduler-kommandoer er dækket af automatiske tests, men skal release-testes på rigtig Windows-hardware før en stabil Windows-udgivelse.
+
+## Afinstallation
+
+1. Deaktivér **Start automatisk ved login** i RosterMate.
+2. Luk den lokale Python-proces.
+3. Slet den klonede programmappe.
+4. Slet `%LOCALAPPDATA%\RosterMate`, hvis kalenderdata, profiler og backups også skal fjernes.
