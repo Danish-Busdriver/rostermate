@@ -98,9 +98,19 @@ Når det er færdigt åbnes appen automatisk på:
 http://127.0.0.1:8080
 ```
 
-## Opdater den lokale installation
+## Automatiske opdateringer
 
-Automatiske GitHub-opdateringer er endnu ikke implementeret. Opdater derfor installationen manuelt fra projektmappen:
+Når RosterMate startes via `run.command` eller macOS-appens launcher, checker den automatisk den aktuelle branches tracking-branch på GitHub. En opdatering installeres kun, når den kan anvendes som en sikker fast-forward, og når der ikke findes lokale ændringer i trackede kodefiler.
+
+Hvis GitHub ikke kan nås, eller den lokale branch er ændret, starter den eksisterende installation uden at overskrive noget. Hvis `requirements.txt` ændres under opdateringen, installeres de nye Python-afhængigheder automatisk.
+
+Automatisk opdatering kan springes over for en enkelt start:
+
+```bash
+ROSTERMATE_SKIP_UPDATE=1 ./run.command
+```
+
+Manuel opdatering kan stadig køres fra projektmappen:
 
 ```bash
 git pull --ff-only
@@ -242,7 +252,7 @@ Se mere i [docs/BETA_WORKFLOW.md](docs/BETA_WORKFLOW.md) og [docs/BEGINNER_WORKF
 ## Version 1.1
 
 - [ ] GitHub integration
-- [ ] Automatiske opdateringer
+- [x] Automatiske opdateringer
 - [ ] Release-system
 - [ ] Backup før opdatering
 

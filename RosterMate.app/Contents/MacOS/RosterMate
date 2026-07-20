@@ -15,7 +15,7 @@ fi
 
 (
   cd "$APP_ROOT"
-  python3 app.py >"$LOG_FILE" 2>&1
+  ./run.command >"$LOG_FILE" 2>&1
 ) &
 
 sleep 2
