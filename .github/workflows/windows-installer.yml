@@ -53,8 +53,8 @@ jobs:
         run: |
           $Installer = (Resolve-Path "dist\windows\RosterMate-${{ inputs.version }}-Windows-Setup.exe").Path
           $InstallDir = Join-Path $env:RUNNER_TEMP "RosterMate-E2E"
-          & $Installer /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- "/DIR=$InstallDir"
-          if ($LASTEXITCODE -ne 0) { throw "Setup.exe fejlede med kode $LASTEXITCODE" }
+          $Setup = Start-Process -FilePath $Installer -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/DIR=$InstallDir") -Wait -PassThru
+          if ($Setup.ExitCode -ne 0) { throw "Setup.exe fejlede med kode $($Setup.ExitCode)" }
 
           $env:ROSTERMATE_NO_BROWSER = "1"
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $InstallDir "run-windows.ps1")
@@ -71,8 +71,8 @@ jobs:
           $TrayPid = [int]((Get-Content $TrayPidFile -Raw).Split(",")[0])
           if (-not (Get-Process -Id $TrayPid -ErrorAction SilentlyContinue)) { throw "Tray-ikonprocessen kører ikke" }
 
-          & (Join-Path $InstallDir "unins000.exe") /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
-          if ($LASTEXITCODE -ne 0) { throw "Afinstallationen fejlede med kode $LASTEXITCODE" }
+          $Uninstall = Start-Process -FilePath (Join-Path $InstallDir "unins000.exe") -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART") -Wait -PassThru
+          if ($Uninstall.ExitCode -ne 0) { throw "Afinstallationen fejlede med kode $($Uninstall.ExitCode)" }
 
       - uses: actions/upload-artifact@v4
         with:
