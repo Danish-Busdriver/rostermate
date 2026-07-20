@@ -30,7 +30,7 @@ SelfService-synkronisering navigerer automatisk gennem alle kalendermåneder, so
 
 Google Calendar kræver en OAuth-klient af typen **Web application**. Aktivér Google Calendar API, konfigurér OAuth-samtykkeskærmen, og registrér den redirect-URI, som vises i RosterMate. Det fulde Client ID slutter med `.apps.googleusercontent.com`; RosterMate afviser ugyldige ID'er lokalt, før Google-login åbnes.
 
-Dashboardet viser et personligt kalenderabonnementslink med Mac'ens lokale IP-adresse. Linket kan tilføjes på en iPhone på samme Wi-Fi-netværk. RosterMate lytter på lokalnetværket, men beskytter dashboard, indstillinger og login, så kun den token-beskyttede `.ics`-fil kan hentes fra andre enheder. Den lokale adresse kan om nødvendigt styres med `ROSTERMATE_LAN_HOST`.
+Dashboardet viser altid tre adskilte kalenderadresser, når de er konfigureret: `127.0.0.1` til denne Mac, Mac'ens lokale IP til en iPhone på samme Wi-Fi og en valgfri offentlig HTTPS-adresse. Netværksadresserne er tokenbeskyttede, mens dashboard, indstillinger og login ikke offentliggøres. Den lokale adresse kan om nødvendigt styres med `ROSTERMATE_LAN_HOST`.
 
 En offentlig HTTPS-adresse kan gemmes som `calendar_public_base_url` i chaufførens lokale indstillinger. Kopiér `Caddyfile.example` til den Git-ignorerede `Caddyfile.local`, og indsæt eget domæne og chaufførnummer. Proxyen offentliggør kun den valgte kalendersti; alle andre offentlige stier returnerer 404. Videresend ekstern TCP 80 til Mac-port 8081 og ekstern TCP 443 til Mac-port 8443.
 

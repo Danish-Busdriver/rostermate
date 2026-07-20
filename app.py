@@ -1417,10 +1417,16 @@ def index(driver_id: str) -> str:
     ics_ready = paths["ics_path"].exists() and paths["ics_path"].stat().st_size > 0
     google_status = google_integration_status(settings, safe_driver_id, paths["google_token_path"])
     urls = driver_urls(safe_driver_id)
-    calendar_subscription_url = calendar_subscription_address(
+    local_calendar_url = f"http://127.0.0.1:8080{urls['calendar_url']}"
+    lan_calendar_url = calendar_subscription_address(
         safe_driver_id,
         str(settings["calendar_access_token"]),
-        str(settings.get("calendar_public_base_url") or ""),
+    )
+    public_calendar_base_url = str(settings.get("calendar_public_base_url") or "")
+    public_calendar_url = (
+        calendar_subscription_address(safe_driver_id, str(settings["calendar_access_token"]), public_calendar_base_url)
+        if public_calendar_base_url
+        else ""
     )
     needs_selfservice_setup = not session_store.has_saved_session()
     show_profile_switcher = len(list_driver_ids()) > 1
@@ -2173,7 +2179,14 @@ def index(driver_id: str) -> str:
                                     <strong>ICS eksport</strong>
                                     <div class="small">{{ 'Kalenderfilen er klar til brug.' if ics_ready else 'Kalenderfilen oprettes efter første sync.' }}</div>
                                     <div style="margin-top:0.8rem;"><a class="button-link ghost" href="{{ urls.calendar_url }}">Åbn fil</a></div>
-                                    <div class="small" style="margin-top:0.7rem; overflow-wrap:anywhere;">{{ calendar_subscription_url }}</div>
+                                    <div class="small" style="margin-top:0.7rem;"><strong>På denne Mac</strong></div>
+                                    <div class="small" style="overflow-wrap:anywhere;">{{ local_calendar_url }}</div>
+                                    <div class="small" style="margin-top:0.7rem;"><strong>Samme Wi-Fi</strong></div>
+                                    <div class="small" style="overflow-wrap:anywhere;">{{ lan_calendar_url }}</div>
+                                    {% if public_calendar_url %}
+                                    <div class="small" style="margin-top:0.7rem;"><strong>Overalt via HTTPS</strong></div>
+                                    <div class="small" style="overflow-wrap:anywhere;">{{ public_calendar_url }}</div>
+                                    {% endif %}
                                 </div>
                                 <div class="quick-card">
                                     <strong>Google Calendar</strong>
@@ -2207,7 +2220,9 @@ def index(driver_id: str) -> str:
         ics_ready=ics_ready,
         google_status=google_status,
         urls=urls,
-        calendar_subscription_url=calendar_subscription_url,
+        local_calendar_url=local_calendar_url,
+        lan_calendar_url=lan_calendar_url,
+        public_calendar_url=public_calendar_url,
         software=software_info(),
         show_profile_switcher=show_profile_switcher,
         needs_selfservice_setup=needs_selfservice_setup,
