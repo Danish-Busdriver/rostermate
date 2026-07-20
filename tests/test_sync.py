@@ -275,6 +275,26 @@ def test_select_next_calendar_events_sorts_same_day_by_start_time():
     assert [event["id"] for event in selected] == ["early", "late"]
 
 
+def test_select_next_calendar_events_limits_distinct_dates_not_event_count():
+    events = [
+        {"id": "duplicate-a", "date": "2026-07-20", "start": "2026-07-20T06:00:00"},
+        {"id": "duplicate-b", "date": "2026-07-20", "start": "2026-07-20T06:00:00+02:00"},
+        *[
+            {
+                "id": f"future-{index}",
+                "date": f"2026-07-{21 + index:02d}",
+                "start": f"2026-07-{21 + index:02d}T08:00:00",
+            }
+            for index in range(7)
+        ],
+    ]
+
+    selected = select_next_calendar_events(events, today=app_module.date(2026, 7, 20))
+
+    assert len({event["date"] for event in selected}) == 7
+    assert {event["date"] for event in selected} == {f"2026-07-{day:02d}" for day in range(20, 27)}
+
+
 def test_software_info_exposes_version_and_survives_missing_git(tmp_path):
     info = software_info(tmp_path)
 

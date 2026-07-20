@@ -24,7 +24,7 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 
 - Hente vagter direkte fra SelfService
 - Synkronisere på tværs af månedsskift
-- Vise de næste syv kalenderposter på dashboardet
+- Vise de næste syv forskellige kalenderdage på dashboardet
 - Eksportere vagter til Apple Kalender og andre ICS-kompatible kalendere
 - Dele kalenderen lokalt, på samme Wi-Fi eller via en valgfri offentlig HTTPS-adresse
 - Synkronisere direkte til Google Calendar

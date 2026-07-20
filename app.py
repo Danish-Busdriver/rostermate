@@ -475,7 +475,7 @@ def select_next_calendar_events(
     today: date | None = None,
     limit: int = 7,
 ) -> list[dict[str, Any]]:
-    """Return the next calendar events, excluding stale and invalid entries."""
+    """Return every event from the next distinct calendar dates."""
     start_date = today or date.today()
     upcoming: list[dict[str, Any]] = []
 
@@ -488,10 +488,18 @@ def select_next_calendar_events(
         if event_date >= start_date:
             upcoming.append(event)
 
-    return sorted(
+    sorted_events = sorted(
         upcoming,
         key=lambda item: (str(item.get("date", "")), str(item.get("start", ""))),
-    )[:max(0, limit)]
+    )
+    selected_dates: list[str] = []
+    for event in sorted_events:
+        shift_date = str(event.get("date", ""))
+        if shift_date not in selected_dates:
+            if len(selected_dates) >= max(0, limit):
+                break
+            selected_dates.append(shift_date)
+    return [event for event in sorted_events if str(event.get("date", "")) in selected_dates]
 
 
 def describe_change(change: dict[str, Any]) -> dict[str, str]:
@@ -2090,7 +2098,7 @@ def index(driver_id: str) -> str:
                     <div class="card">
                         <div class="card-head">
                             <div>
-                                <h2>De næste 7 kalenderposter</h2>
+                                <h2>De næste 7 kalenderdage</h2>
                                 <p class="small">Kun kommende poster fra i dag, sorteret efter dato og starttid.</p>
                             </div>
                             <a class="section-link" href="{{ urls.history_url }}">Se historik</a>
