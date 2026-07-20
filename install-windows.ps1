@@ -3,7 +3,7 @@ Set-StrictMode -Version Latest
 
 $ProjectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $ProjectDir
-$PythonVersion = "3.13.9"
+$PythonVersion = "3.14.6"
 
 function Find-RosterMatePython {
     $Candidates = @()
@@ -15,12 +15,12 @@ function Find-RosterMatePython {
         } catch {}
     }
     $Candidates += @(
-        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python313\python.exe"),
-        (Join-Path $env:ProgramFiles "Python313\python.exe")
+        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python314\python.exe"),
+        (Join-Path $env:ProgramFiles "Python314\python.exe")
     )
     foreach ($Candidate in $Candidates) {
         if ($Candidate -and (Test-Path $Candidate)) {
-            & $Candidate -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)"
+            & $Candidate -c "import sys; raise SystemExit(0 if sys.version_info[:3] >= (3, 14, 6) else 1)"
             if ($LASTEXITCODE -eq 0) { return $Candidate }
         }
     }
@@ -40,7 +40,23 @@ if (-not $SystemPython) {
     if (-not $SystemPython) { throw "Python blev installeret, men kunne ikke findes bagefter." }
 }
 
-if (-not (Test-Path ".venv\Scripts\python.exe")) {
+function Test-RosterMateVenv {
+    $Config = Join-Path $ProjectDir ".venv\pyvenv.cfg"
+    $Python = Join-Path $ProjectDir ".venv\Scripts\python.exe"
+    if (-not (Test-Path $Config) -or -not (Test-Path $Python)) { return $false }
+    try {
+        & $Python -c "import sys; raise SystemExit(0 if sys.prefix != sys.base_prefix and sys.version_info[:3] >= (3, 14, 6) else 1)" 2>$null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    }
+}
+
+if (-not (Test-RosterMateVenv)) {
+    if (Test-Path ".venv") {
+        Write-Host "Fjerner et ufuldstændigt virtuelt Python-miljø..."
+        Remove-Item ".venv" -Recurse -Force
+    }
     Write-Host "Opretter virtuelt Python-miljø..."
     & $SystemPython -m venv .venv
 }

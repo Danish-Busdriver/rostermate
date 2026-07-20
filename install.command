@@ -31,7 +31,11 @@ APPLESCRIPT
   PYTHON_CMD="/Library/Frameworks/Python.framework/Versions/3.14/bin/python3"
 fi
 
-if [ ! -d ".venv" ]; then
+if [ ! -f ".venv/pyvenv.cfg" ] || [ ! -x ".venv/bin/python3" ] || ! .venv/bin/python3 -c 'import sys; raise SystemExit(0 if sys.prefix != sys.base_prefix else 1)' 2>/dev/null; then
+  if [ -e ".venv" ]; then
+    echo "Fjerner et ufuldstændigt virtuelt miljø..."
+    rm -rf "$SCRIPT_DIR/.venv"
+  fi
   echo "Opretter virtuelt miljø..."
   "$PYTHON_CMD" -m venv .venv
 fi

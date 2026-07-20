@@ -6,7 +6,7 @@ on:
       version:
         description: "RosterMate version without leading v"
         required: true
-        default: "1.7.0"
+        default: "1.7.1"
 
 jobs:
   build:
@@ -55,6 +55,14 @@ jobs:
           $InstallDir = Join-Path $env:RUNNER_TEMP "RosterMate-E2E"
           $Setup = Start-Process -FilePath $Installer -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/DIR=$InstallDir") -Wait -PassThru
           if ($Setup.ExitCode -ne 0) { throw "Setup.exe fejlede med kode $($Setup.ExitCode)" }
+          if (Test-Path (Join-Path $InstallDir "RosterMate.app")) { throw "Windows-pakken indeholder macOS-appen" }
+          if (Test-Path (Join-Path $InstallDir "install.command")) { throw "Windows-pakken indeholder macOS-installationsfiler" }
+
+          # Genskab præcis den rapporterede fejl og bekræft selvreparationen.
+          Remove-Item (Join-Path $InstallDir ".venv\pyvenv.cfg") -Force
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $InstallDir "install-windows.ps1")
+          if ($LASTEXITCODE -ne 0) { throw "Reparation af et miljø uden pyvenv.cfg fejlede" }
+          if (-not (Test-Path (Join-Path $InstallDir ".venv\pyvenv.cfg"))) { throw "pyvenv.cfg blev ikke genskabt" }
 
           $env:ROSTERMATE_NO_BROWSER = "1"
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $InstallDir "run-windows.ps1")

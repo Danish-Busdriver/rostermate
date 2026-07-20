@@ -13,5 +13,5 @@
   <choice id="rostermate" visible="false">
     <pkg-ref id="dk.pullen.rostermate.pkg"/>
   </choice>
-  <pkg-ref id="dk.pullen.rostermate.pkg" version="1.7.0" onConclusion="none">RosterMate-component.pkg</pkg-ref>
+  <pkg-ref id="dk.pullen.rostermate.pkg" version="1.7.1" onConclusion="none">RosterMate-component.pkg</pkg-ref>
 </installer-gui-script>

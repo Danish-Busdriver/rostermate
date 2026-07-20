@@ -93,6 +93,9 @@ def test_windows_distribution_files_are_present():
     launcher = (project_root / "run-windows.ps1").read_text(encoding="utf-8")
     assert "playwright install chromium" in installer
     assert "python.org/ftp/python" in installer
+    assert "Test-RosterMateVenv" in installer
+    assert 'Test-Path $Config' in installer
+    assert 'Remove-Item ".venv" -Recurse -Force' in installer
     assert 'Join-Path $env:LOCALAPPDATA "RosterMate"' in installer
     assert '"RosterMate.lnk"' in installer
     assert "windows_launcher.py" in launcher
@@ -120,6 +123,8 @@ def test_windows_exe_installer_definition_is_present():
     assert "RosterMate.ico" in installer
     assert "Afinstaller RosterMate" in installer
     assert "[UninstallRun]" in installer
+    assert "RosterMate.app\\*" in installer
+    assert "install.command" in installer
 
 
 def test_macos_app_bootstraps_first_install_and_checks_version():
@@ -158,6 +163,8 @@ def test_macos_pkg_installer_is_present_and_self_contained():
     assert "RosterMate.app" in postinstall
     assert "actions/upload-artifact@v4" in workflow
     assert "Validate package contents" in workflow
+    assert '"$PAYLOAD_DIR/windows_launcher.py"' in builder
+    assert "Payload/install-windows.ps1" in workflow
 
 
 def test_shared_tray_uses_the_rostermate_logo_and_expected_actions():

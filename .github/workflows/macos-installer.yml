@@ -6,7 +6,7 @@ on:
       version:
         description: "RosterMate version without leading v"
         required: true
-        default: "1.7.0"
+        default: "1.7.1"
 
 jobs:
   build:
@@ -30,6 +30,8 @@ jobs:
       - name: Build PKG installer
         run: |
           chmod +x build-macos-pkg.command installer/macos/scripts/postinstall
+          bash -n build-macos-pkg.command install.command installer/macos/scripts/postinstall
+          curl --fail --head --location --retry 3 https://www.python.org/ftp/python/3.14.6/python-3.14.6-macos11.pkg
           ./build-macos-pkg.command "${{ inputs.version }}"
 
       - name: Validate package contents
@@ -41,6 +43,8 @@ jobs:
           test -f "$EXPANDED/RosterMate-component.pkg/Payload/app.py"
           grep -q 'APP_VERSION = "${{ inputs.version }}"' "$EXPANDED/RosterMate-component.pkg/Payload/app.py"
           test -x "$EXPANDED/RosterMate-component.pkg/Scripts/postinstall"
+          test ! -e "$EXPANDED/RosterMate-component.pkg/Payload/install-windows.ps1"
+          test ! -e "$EXPANDED/RosterMate-component.pkg/Payload/windows_launcher.py"
 
       - uses: actions/upload-artifact@v4
         with:
