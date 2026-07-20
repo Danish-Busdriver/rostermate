@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 import json
 import os
 import re
@@ -188,6 +189,10 @@ def create_backup(source: Path, backup_dir: Path | None = None) -> Path:
     return backup_path
 
 
+def build_event_id(title: str, shift_date: str, shift_from: str, shift_to: str) -> str:
+    return "|".join([shift_date, title.strip() or "Ukendt", shift_from or "00:00", shift_to or shift_from or "00:00"])
+
+
 def build_event_from_shift(shift: dict[str, Any], shift_date: str) -> dict[str, Any]:
     title = shift.get("id") or shift.get("title") or "Ukendt"
     shift_from = str(shift.get("from", "")).strip()
@@ -209,13 +214,174 @@ def build_event_from_shift(shift: dict[str, Any], shift_date: str) -> dict[str, 
         end = end_dt.strftime("%Y-%m-%dT%H:%M:%S")
 
     return {
-        "id": title,
+        "id": build_event_id(title, shift_date, shift_from, shift_to),
         "title": title,
         "date": shift_date,
         "start": start,
         "end": end,
         "all_day": is_all_day,
     }
+
+
+def _add_months(base_month: date, months: int = 1) -> date:
+    month_index = (base_month.year * 12 + base_month.month - 1) + months
+    year = month_index // 12
+    month = month_index % 12 + 1
+    return date(year, month, 1)
+
+
+def calendar_months_in_range(window_start: date, window_end: date) -> list[date]:
+    months = [window_start.replace(day=1)]
+    while months[-1] < window_end.replace(day=1):
+        months.append(_add_months(months[-1]))
+    return months
+
+
+def _iter_attribute_values(value: Any) -> list[str]:
+    if isinstance(value, (list, tuple, set)):
+        return [str(item) for item in value]
+    return [str(value)]
+
+
+def _extract_explicit_date(element: Any) -> str | None:
+    iso_date_pattern = re.compile(r"(20\d{2}-\d{2}-\d{2})")
+    for node in [element, *element.parents]:
+        for attr_value in getattr(node, "attrs", {}).values():
+            for candidate in _iter_attribute_values(attr_value):
+                match = iso_date_pattern.search(candidate)
+                if match:
+                    return match.group(1)
+
+        day_value = node.attrs.get("data-day") or node.attrs.get("day")
+        month_value = node.attrs.get("data-month") or node.attrs.get("month")
+        year_value = node.attrs.get("data-year") or node.attrs.get("year")
+        if day_value and month_value and year_value:
+            try:
+                return date(int(year_value), int(month_value), int(day_value)).isoformat()
+            except ValueError:
+                continue
+    return None
+
+
+def extract_shift_rows_from_html(html: str) -> list[dict[str, Any]]:
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "html.parser")
+    rows: list[dict[str, Any]] = []
+    seen_rows: set[str] = set()
+
+    for elem in soup.find_all(True):
+        text = elem.get_text(" ", strip=True)
+        id_match = re.search(r"\b(?P<day>\d{1,2})\s+ID:\s+(?P<title>[A-Za-zÆØÅæøå0-9_.-]+)", text)
+        if not id_match:
+            continue
+
+        times = re.findall(r"(\d{1,2}:\d{2})", text)
+        if len(times) < 2:
+            continue
+
+        row = {
+            "day_number": int(id_match.group("day")),
+            "title": id_match.group("title"),
+            "from": times[0],
+            "to": times[1],
+        }
+        explicit_date = _extract_explicit_date(elem)
+        if explicit_date:
+            row["date"] = explicit_date
+
+        row_key = "|".join(
+            [
+                str(row["day_number"]),
+                row.get("date", ""),
+                row["title"],
+                row["from"],
+                row["to"],
+            ]
+        )
+        if row_key in seen_rows:
+            continue
+        seen_rows.add(row_key)
+        rows.append(row)
+
+    return rows
+
+
+def build_events_from_shift_rows(
+    rows: list[dict[str, Any]],
+    page_month: date,
+    window_start: date,
+    window_end: date,
+) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    seen_event_ids: set[str] = set()
+    current_month = page_month.replace(day=1)
+    previous_day_number: int | None = None
+
+    for row in rows:
+        day_number = int(row["day_number"])
+        if row.get("date"):
+            shift_date = date.fromisoformat(str(row["date"]))
+        else:
+            if previous_day_number is not None and day_number < previous_day_number:
+                current_month = _add_months(current_month)
+
+            last_day_in_month = calendar.monthrange(current_month.year, current_month.month)[1]
+            if day_number > last_day_in_month:
+                previous_day_number = day_number
+                continue
+            shift_date = current_month.replace(day=day_number)
+
+        previous_day_number = day_number
+        if not (window_start <= shift_date <= window_end):
+            continue
+
+        event = build_event_from_shift(
+            {"id": row["title"], "from": row["from"], "to": row["to"]},
+            shift_date.isoformat(),
+        )
+        if event["id"] in seen_event_ids:
+            continue
+        seen_event_ids.add(event["id"])
+        events.append(event)
+
+    return events
+
+
+def go_to_next_calendar_month(page: Any) -> bool:
+    selectors = [
+        ".k-nav-next",
+        ".fc-next-button",
+        "#NextMonth",
+        "[aria-label*='Next month']",
+        "[aria-label*='Next']",
+        "[aria-label*='Næste']",
+        "[title*='Next']",
+        "[title*='Næste']",
+        "button:has-text('Next')",
+        "button:has-text('Næste')",
+        "button:has-text('>')",
+        "button:has-text('›')",
+        "a:has-text('>')",
+        "a:has-text('›')",
+    ]
+
+    for selector in selectors:
+        locator = page.locator(selector).first
+        if locator.count() == 0:
+            continue
+
+        before_html = page.content()
+        try:
+            locator.click(timeout=5000)
+            page.wait_for_load_state("networkidle", timeout=15000)
+        except Exception:
+            continue
+
+        if page.content() != before_html:
+            return True
+
+    return False
 
 
 def _is_in_window(value: str | None, window_start: str, window_end: str) -> bool:
@@ -303,12 +469,14 @@ def fetch_selfservice_schedule(days_ahead: int) -> tuple[list[dict[str, Any]], s
         return [], "Indtast brugernavn og adgangskode i .env"
 
     try:
-        from bs4 import BeautifulSoup
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
         return [], f"Afhængighed mangler: {exc}"
 
-    html = None
+    window_start = date.today()
+    window_end = window_start + timedelta(days=days_ahead)
+    months_to_visit = calendar_months_in_range(window_start, window_end)
+    page_html_by_month: list[tuple[date, str]] = []
     try:
         with sync_playwright() as p:
             # Start browser
@@ -367,78 +535,50 @@ def fetch_selfservice_schedule(days_ahead: int) -> tuple[list[dict[str, Any]], s
                 # Vent på at siden bliver idle
                 page.wait_for_load_state("networkidle", timeout=20000)
             
-            # Hent HTML efter at alt har ladet
-            html = page.content()
-            
-            # DEBUG: Log HTML
+            for month_index, page_month in enumerate(months_to_visit):
+                if month_index > 0:
+                    if not go_to_next_calendar_month(page):
+                        browser.close()
+                        return [], "Kunne ikke skifte til næste måned i arbejdskalenderen"
+
+                current_html = page.content()
+                page_html_by_month.append((page_month, current_html))
+
             debug_path = OUTPUT_DIR / "debug_html.log"
             with debug_path.open("w", encoding="utf-8") as f:
-                f.write(html[:50000])  # Øg til 50KB for bedre debugging
-            
+                for page_month, html in page_html_by_month:
+                    f.write(f"\n--- {page_month.isoformat()} ---\n")
+                    f.write(html[:50000])
+             
             browser.close()
-            
+             
     except Exception as exc:
         return [], f"Fejl ved henting af schedule: {str(exc)}"
 
-    if not html:
+    if not page_html_by_month:
         return [], "Kunne ikke hente HTML fra SelfService"
 
-    # Parse HTML med BeautifulSoup
-    soup = BeautifulSoup(html, "html.parser")
-    
-    # Tjek om vi kunne logge ind (hvis vi er tilbage på login-siden)
-    if "Username" in html and "Password" in html:
+    first_html = page_html_by_month[0][1]
+    if "Username" in first_html and "Password" in first_html:
         return [], "Login mislykkedes - tjek brugernavn og adgangskode"
-    
-    if "Arbejdskalender" not in html:
-        return [], "Siden loadede ikke korrekt - ikke på arbejdskalender siden"
-    
-    # Søg efter vagt-data i kalenderen
-    shifts: list[dict[str, Any]] = []
-    seen_shifts: set[str] = set()
-    
-    # SelfService bruger tider i formatet HH:MM
-    # Søg efter elementer der indeholder "NUMBER ID:" (f.eks. "29 ID:") hvilket betyder det er en komplet vagt
-    for elem in soup.find_all(True):
-        text = elem.get_text(" ", strip=True)
-        
-        # Skal indeholde "NUMBER ID:" format, ikke bare "ID:"
-        if not re.search(r"\d+\s+ID:", text):
-            continue
-        
-        # Find alle tider i dette element
-        times = re.findall(r"(\d{1,2}:\d{2})", text)
-        
-        # Skal have mindst 2 tider (Fra og Til)
-        if len(times) >= 2:
-            from_time = times[0]
-            to_time = times[1]
-            
-            # Ekstrakt ID-delen med regex (nummer + "ID:" + navn - gemmes fuldt)
-            id_match = re.search(r"(\d+\s+ID:\s+[A-Za-z_]+)", text)
-            id_part = id_match.group(1).strip() if id_match else f"Vagt {from_time}-{to_time}"
-            
-            # Lav unik nøgle for at undgå duplikater
-            shift_key = f"{id_part}_{from_time}_{to_time}"
-            if shift_key not in seen_shifts:
-                seen_shifts.add(shift_key)
-                shifts.append({
-                    "id": id_part[:40],
-                    "from": from_time,
-                    "to": to_time,
-                })
 
-    if not shifts:
+    if "Arbejdskalender" not in first_html:
+        return [], "Siden loadede ikke korrekt - ikke på arbejdskalender siden"
+
+    events: list[dict[str, Any]] = []
+    seen_event_ids: set[str] = set()
+    for page_month, html in page_html_by_month:
+        rows = extract_shift_rows_from_html(html)
+        for event in build_events_from_shift_rows(rows, page_month, window_start, window_end):
+            if event["id"] in seen_event_ids:
+                continue
+            seen_event_ids.add(event["id"])
+            events.append(event)
+
+    if not events:
         return [], "Ingen vagter fundet i kalenderen - muligvis ingen vagter planlagt"
 
-    today = date.today()
-    events: list[dict[str, Any]] = []
-    # Hvert shift får en event med dagens dato (ikke duplikeret for hver dag)
-    for shift in shifts:
-        shift_date = today.strftime("%Y-%m-%d")
-        events.append(build_event_from_shift(shift, shift_date))
-
-    return events, f"Synkronisering gennemført - {len(shifts)} vagter hentet"
+    return events, f"Synkronisering gennemført - {len(events)} vagter hentet"
 
 
 @app.route("/")
@@ -720,7 +860,10 @@ def sync_route() -> tuple[Any, int]:
     ensure_storage()
     settings = load_settings()
     days_ahead = int(request.form.get("days_ahead", settings.get("days_ahead", 7)))
-    remove_old_shifts = request.form.get("remove_old_shifts") == "true"
+    if "remove_old_shifts" in request.form:
+        remove_old_shifts = request.form.get("remove_old_shifts") == "true"
+    else:
+        remove_old_shifts = bool(settings.get("remove_old_shifts", False))
 
     existing_events = load_json(EVENTS_STORE_PATH, [])
     new_events, status_message = fetch_selfservice_schedule(days_ahead)
@@ -728,8 +871,9 @@ def sync_route() -> tuple[Any, int]:
     if not new_events and not existing_events:
         return jsonify({"status": "error", "message": status_message}), 400
 
-    window_start = date.today().strftime("%Y-%m-%d")
-    window_end = (date.today() + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+    today = date.today()
+    window_start = today.strftime("%Y-%m-%d")
+    window_end = (today + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
     updated_events, changes = sync_schedule(existing_events, new_events, window_start, window_end, remove_old_shifts)
     write_outputs(updated_events, changes)
 
