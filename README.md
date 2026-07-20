@@ -75,6 +75,7 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 - [x] Separate chaufførprofiler
 - [x] Automatiske softwareopdateringer
 - [x] Windows-beta med installation, start og autostart
+- [x] Klikbar Windows Setup.exe med Start-menu-genvej og afinstallation
 - [x] Google-login med automatisk oprettelse og navngivning af en separat kalender
 
 ### Næste versioner
@@ -83,7 +84,7 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 - [ ] Notifikationer ved ændrede vagter
 - [ ] Forbedret release- og backupflow
 - [ ] Signeret macOS-installationspakke
-- [ ] Signeret Windows-installationspakke
+- [ ] Digitalt signeret Windows-installationspakke uden SmartScreen-advarsel
 
 ### På længere sigt
 
@@ -94,8 +95,8 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 
 ## Installation
 
-- [Download RosterMate til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.3.0-macOS.zip)
-- [Download RosterMate til Windows (beta)](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.3.0-Windows.zip)
+- [Download RosterMate til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.4.0-macOS.zip)
+- [Download RosterMate Setup.exe til Windows (beta)](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.4.0-Windows-Setup.exe)
 
 Har du brug for hjælp, finder du de separate vejledninger til [macOS](docs/INSTALL_MACOS.md) og [Windows](docs/INSTALL_WINDOWS.md).
 

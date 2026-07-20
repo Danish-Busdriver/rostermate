@@ -1,0 +1,65 @@
+#ifndef AppVersion
+  #define AppVersion "1.4.0"
+#endif
+
+#define AppName "RosterMate"
+#define AppPublisher "Daniel Pullen"
+#define AppURL "https://github.com/Danish-Busdriver/rostermate"
+
+[Setup]
+AppId={{B0270A8E-5458-4C81-936E-309868E15B31}
+AppName={#AppName}
+AppVersion={#AppVersion}
+AppVerName={#AppName} {#AppVersion}
+AppPublisher={#AppPublisher}
+AppPublisherURL={#AppURL}
+AppSupportURL={#AppURL}/issues
+AppUpdatesURL={#AppURL}/releases/latest
+DefaultDirName={localappdata}\Programs\RosterMate
+DefaultGroupName=RosterMate
+DisableProgramGroupPage=yes
+PrivilegesRequired=lowest
+ArchitecturesAllowed=x64compatible
+OutputDir=..\..\dist\windows
+OutputBaseFilename=RosterMate-{#AppVersion}-Windows-Setup
+Compression=lzma2/ultra64
+SolidCompression=yes
+WizardStyle=modern
+CloseApplications=yes
+RestartApplications=no
+VersionInfoVersion={#AppVersion}.0
+VersionInfoCompany={#AppPublisher}
+VersionInfoDescription=RosterMate installation
+VersionInfoProductName={#AppName}
+VersionInfoProductVersion={#AppVersion}
+
+[Languages]
+Name: "danish"; MessagesFile: "compiler:Languages\Danish.isl"
+
+[Files]
+Source: "..\..\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: ".venv\*;data\*;output\*;backups\*;.pytest_cache\*;.env;*.pyc;__pycache__\*;dist\*"
+
+[Icons]
+Name: "{autoprograms}\RosterMate"; Filename: "{app}\run-windows.cmd"; WorkingDir: "{app}"
+Name: "{userdesktop}\RosterMate"; Filename: "{app}\run-windows.cmd"; WorkingDir: "{app}"; Tasks: desktopicon
+
+[Tasks]
+Name: "desktopicon"; Description: "Opret en genvej på skrivebordet"; GroupDescription: "Ekstra genveje:"; Flags: unchecked
+
+[Run]
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-windows.ps1"""; WorkingDir: "{app}"; StatusMsg: "Installerer RosterMate og browserkomponenter..."; Flags: waituntilterminated
+Filename: "{app}\run-windows.cmd"; Description: "Start RosterMate"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
+
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}\.venv"
+Type: files; Name: "{app}\.env"
+
+[Code]
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+begin
+  Result := '';
+  if not Exec('py.exe', '-3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+    Result := 'RosterMate kræver Python 3.12 eller nyere. Installer Python fra python.org, markér Add Python to PATH, og start derefter installationen igen.';
+end;

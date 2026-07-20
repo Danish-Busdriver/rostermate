@@ -11,6 +11,8 @@ Denne guide indeholder installation, opdatering og teknisk drift af RosterMate p
 
 ## Anbefalet installation
 
+Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.4.0-macOS.zip`, pak filen ud, og fortsæt med installationen nedenfor.
+
 Åbn Terminal og kør:
 
 ```bash
