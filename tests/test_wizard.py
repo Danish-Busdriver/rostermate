@@ -5,7 +5,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app as app_module
 import launch_agent as launch_agent_module
-from login import read_stable_page_content
+from login import launch_authenticated_context, read_stable_page_content
+from session import SelfServiceSessionStore
 
 
 class NavigatingPage:
@@ -52,6 +53,31 @@ def test_read_stable_page_content_reraises_non_navigation_errors():
         assert str(exc) == "Browser process closed"
     else:
         raise AssertionError("Expected the non-navigation error to be re-raised")
+
+
+def test_launch_authenticated_context_reuses_persistent_driver_profile(tmp_path):
+    calls: list[tuple[str, object]] = []
+
+    class Chromium:
+        def launch_persistent_context(self, **kwargs):
+            calls.append(("persistent", kwargs))
+            return "persistent-context"
+
+        def launch(self, **kwargs):
+            calls.append(("browser", kwargs))
+            raise AssertionError("A separate browser must not be launched")
+
+    class Playwright:
+        chromium = Chromium()
+
+    store = SelfServiceSessionStore("15831", tmp_path / "state.json", tmp_path / "profile")
+    store.user_data_dir.mkdir()
+
+    browser, context = launch_authenticated_context(Playwright(), store, headless=True)
+
+    assert browser is None
+    assert context == "persistent-context"
+    assert calls == [("persistent", {"user_data_dir": str(store.user_data_dir), "headless": True})]
 
 
 def test_wizard_test_connection_route_returns_error_without_session(tmp_path, monkeypatch):

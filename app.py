@@ -14,7 +14,7 @@ from flask import Flask, abort, jsonify, redirect, render_template_string, reque
 
 from dashboard import should_show_first_run, should_show_welcome_back
 from launch_agent import sync_launch_agent_preference
-from login import login_manager
+from login import launch_authenticated_context, login_manager, read_stable_page_content
 from session import SelfServiceSessionStore
 from settings import apply_wizard_preferences, with_setup_defaults
 from sync import build_sync_preview, run_initial_sync
@@ -799,17 +799,18 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
     html = None
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context_options: dict[str, Any] = {}
-            if session_store.has_saved_session():
-                context_options["storage_state"] = str(session_store.storage_state_path)
-            context = browser.new_context(**context_options)
+            browser, context = launch_authenticated_context(p, session_store, headless=True)
             page = context.new_page()
             page.set_default_timeout(30000)
 
             page.goto(settings["url"], wait_until="load")
 
-            initial_html = page.content()
+            initial_html = read_stable_page_content(page)
+            if initial_html is None:
+                context.close()
+                if browser is not None:
+                    browser.close()
+                return [], "SelfService navigerer stadig. Prøv synkroniseringen igen om et øjeblik."
             debug_path = paths["output_dir"] / "debug_initial.log"
             with debug_path.open("w", encoding="utf-8") as f:
                 f.write(initial_html[:10000])
@@ -818,12 +819,14 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
                 if session_store.has_saved_session():
                     session_store.clear()
                     context.close()
-                    browser.close()
+                    if browser is not None:
+                        browser.close()
                     return [], "SelfService-sessionen er udløbet. Forbind til SelfService igen i opsætningsguiden."
 
                 if not settings.get("user") or not settings.get("pass"):
                     context.close()
-                    browser.close()
+                    if browser is not None:
+                        browser.close()
                     return [], "Forbind til SelfService via opsætningsguiden først."
 
                 page.fill("input#Username", settings["user"])
@@ -847,7 +850,8 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
 
                 if not clicked:
                     context.close()
-                    browser.close()
+                    if browser is not None:
+                        browser.close()
                     return [], "Kunne ikke finde login-knap"
 
                 try:
@@ -861,7 +865,7 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
                     pass
 
                 page.wait_for_load_state("networkidle", timeout=20000)
-                context.storage_state(path=str(session_store.storage_state_path))
+                context.storage_state(path=str(session_store.storage_state_path), indexed_db=True)
 
                 try:
                     page.evaluate("window.scrollBy(0, document.body.scrollHeight)")
@@ -887,14 +891,20 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
                 except:
                     pass
 
-            html = page.content()
+            html = read_stable_page_content(page)
+            if html is None:
+                context.close()
+                if browser is not None:
+                    browser.close()
+                return [], "SelfService navigerer stadig. Prøv synkroniseringen igen om et øjeblik."
 
             debug_path = paths["output_dir"] / "debug_html.log"
             with debug_path.open("w", encoding="utf-8") as f:
                 f.write(html[:100000])
 
             context.close()
-            browser.close()
+            if browser is not None:
+                browser.close()
 
     except Exception as exc:
         return [], f"Fejl ved henting af schedule: {str(exc)}"
