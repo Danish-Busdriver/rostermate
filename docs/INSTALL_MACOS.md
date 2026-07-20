@@ -11,9 +11,9 @@ Denne guide indeholder installation, opdatering og teknisk drift af RosterMate p
 
 ## Anbefalet installation
 
-Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.5.1-macOS.zip`, og pak filen ud.
+Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.5.2-macOS.zip`, og pak filen ud.
 
-Dobbeltklik derefter på `RosterMate.app`. Ved første start henter appen selv en officiel Python-pakke fra python.org, hvis den mangler, og installerer derefter app-afhængighederne samt Chromium-browseren. macOS beder om administratorgodkendelse, hvis Python skal installeres. Når den korrekte RosterMate-version svarer, åbnes opsætningsguiden automatisk. Første start kan tage et par minutter.
+Dobbeltklik derefter på `RosterMate.app`. Ved første start henter appen selv en officiel Python-pakke fra python.org, hvis den mangler, og installerer derefter app-afhængighederne samt Chromium-browseren. macOS beder om administratorgodkendelse, hvis Python skal installeres. Når den korrekte RosterMate-version svarer, åbnes `http://localhost:8080/wizard/` automatisk. Første start kan tage et par minutter.
 
 Terminalinstallation er et alternativ:
 

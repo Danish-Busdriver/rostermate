@@ -58,7 +58,7 @@ GOOGLE_TOKEN_PATH = DATA_DIR / "google_token.json"
 GOOGLE_SYNC_STATE_PATH = DATA_DIR / "google_sync_state.json"
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar"]
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.5.1"
+APP_VERSION = "1.5.2"
 
 
 def is_loopback_request() -> bool:
@@ -1347,6 +1347,12 @@ def home() -> Any:
         driver_ids=driver_ids,
         notice=notice,
     )
+
+
+@app.route("/wizard/", methods=["GET", "POST"])
+def global_wizard() -> Any:
+    """Stable first-run address used by both platform installers."""
+    return home()
 
 
 @app.route("/<driver_id>/wizard")

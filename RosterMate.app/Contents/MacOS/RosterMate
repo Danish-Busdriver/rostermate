@@ -22,7 +22,7 @@ current_health="$(curl -fsS "http://127.0.0.1:8080/health" 2>/dev/null || true)"
 
 if printf '%s' "$current_health" | grep -q "\"version\":\"$EXPECTED_VERSION\""; then
   server_pid="$(lsof -ti tcp:8080 2>/dev/null | head -1 || true)"
-  open "http://127.0.0.1:8080" >/dev/null 2>&1 || true
+  open "http://localhost:8080/wizard/" >/dev/null 2>&1 || true
   exec "$APP_ROOT/.venv/bin/python3" "$APP_ROOT/tray.py" --server-pid "${server_pid:-0}"
 fi
 
@@ -42,7 +42,7 @@ server_pid=$!
 for _ in $(seq 1 60); do
   health="$(curl -fsS "http://127.0.0.1:8080/health" 2>/dev/null || true)"
   if printf '%s' "$health" | grep -q "\"version\":\"$EXPECTED_VERSION\""; then
-    open "http://127.0.0.1:8080" >/dev/null 2>&1 || true
+    open "http://localhost:8080/wizard/" >/dev/null 2>&1 || true
     wait "$server_pid" 2>/dev/null || true
     exit 0
   fi
