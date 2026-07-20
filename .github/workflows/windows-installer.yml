@@ -6,7 +6,7 @@ on:
       version:
         description: "RosterMate version without leading v"
         required: true
-        default: "1.6.1"
+        default: "1.6.2"
 
 jobs:
   build:
@@ -47,6 +47,32 @@ jobs:
           $Installer = "dist\windows\RosterMate-${{ inputs.version }}-Windows-Setup.exe"
           if (-not (Test-Path $Installer)) { throw "Installer blev ikke oprettet" }
           Get-Item $Installer | Format-List Name, Length, LastWriteTime
+
+      - name: Install and launch packaged application
+        shell: powershell
+        run: |
+          $Installer = (Resolve-Path "dist\windows\RosterMate-${{ inputs.version }}-Windows-Setup.exe").Path
+          $InstallDir = Join-Path $env:RUNNER_TEMP "RosterMate-E2E"
+          & $Installer /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- "/DIR=$InstallDir"
+          if ($LASTEXITCODE -ne 0) { throw "Setup.exe fejlede med kode $LASTEXITCODE" }
+
+          $env:ROSTERMATE_NO_BROWSER = "1"
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $InstallDir "run-windows.ps1")
+          if ($LASTEXITCODE -ne 0) { throw "Den installerede RosterMate-start fejlede" }
+
+          $Python = Join-Path $InstallDir ".venv\Scripts\python.exe"
+          $Port = & $Python (Join-Path $InstallDir "port_config.py") configured
+          $Health = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/health" -TimeoutSec 5
+          if ($Health.version -ne "${{ inputs.version }}") { throw "Forkert serverversion: $($Health.version)" }
+
+          Start-Sleep -Seconds 2
+          $TrayPidFile = Join-Path $env:LOCALAPPDATA "RosterMate\rostermate-tray.pid"
+          if (-not (Test-Path $TrayPidFile)) { throw "Tray-ikonprocessen blev ikke startet" }
+          $TrayPid = [int]((Get-Content $TrayPidFile -Raw).Split(",")[0])
+          if (-not (Get-Process -Id $TrayPid -ErrorAction SilentlyContinue)) { throw "Tray-ikonprocessen kører ikke" }
+
+          & (Join-Path $InstallDir "unins000.exe") /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+          if ($LASTEXITCODE -ne 0) { throw "Afinstallationen fejlede med kode $LASTEXITCODE" }
 
       - uses: actions/upload-artifact@v4
         with:
