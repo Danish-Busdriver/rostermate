@@ -11,6 +11,7 @@ fi
 
 source .venv/bin/activate
 python3 auto_update.py
+export ROSTERMATE_PORT="$(python3 port_config.py ensure)"
 python3 app.py &
 server_pid=$!
 

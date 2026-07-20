@@ -11,9 +11,9 @@ Denne guide indeholder installation, opdatering og teknisk drift af RosterMate p
 
 ## Anbefalet installation
 
-Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.5.2-macOS.zip`, og pak filen ud.
+Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.6.0-macOS.zip`, og pak filen ud.
 
-Dobbeltklik derefter på `RosterMate.app`. Ved første start henter appen selv en officiel Python-pakke fra python.org, hvis den mangler, og installerer derefter app-afhængighederne samt Chromium-browseren. macOS beder om administratorgodkendelse, hvis Python skal installeres. Når den korrekte RosterMate-version svarer, åbnes `http://localhost:8080/wizard/` automatisk. Første start kan tage et par minutter.
+Dobbeltklik derefter på `RosterMate.app`. Ved første start henter appen selv en officiel Python-pakke fra python.org, hvis den mangler, og installerer derefter app-afhængighederne samt Chromium-browseren. macOS beder om administratorgodkendelse, hvis Python skal installeres. RosterMate bruger port 8080, hvis den er ledig; ellers vælges automatisk den første ledige port frem til 8179. Opsætningsguiden åbnes automatisk på den valgte port. Første start kan tage et par minutter.
 
 Terminalinstallation er et alternativ:
 
@@ -32,14 +32,14 @@ Installationsscriptet henter om nødvendigt Python, opretter et virtuelt miljø,
 Åbn derefter:
 
 ```text
-http://127.0.0.1:8080
+http://localhost:<valgt-port>/wizard/
 ```
 
 Følg opsætningsguiden i browseren for at oprette en chaufførprofil og forbinde til SelfService.
 
 ## Start via macOS-app
 
-Repositoryet indeholder `RosterMate.app`. App-bundlen installerer manglende komponenter, stopper en eventuel forældet RosterMate-proces på port 8080 og åbner først brugerfladen, når den aktuelle version har bestået sit health-check. En installation uden profiler sendes derfor direkte til opsætningsguiden. Mens RosterMate kører, vises logoet i menulinjen med genveje til at åbne eller afslutte appen. macOS kan ved første start bede om tilladelse til at åbne en app fra en ukendt udvikler.
+Repositoryet indeholder `RosterMate.app`. App-bundlen installerer manglende komponenter, genstarter kun en proces der kan identificeres som en ældre RosterMate-version og åbner først brugerfladen, når den aktuelle version har bestået sit health-check. Andre programmer på den ønskede port stoppes ikke. En installation uden profiler sendes direkte til opsætningsguiden. Mens RosterMate kører, vises logoet i menulinjen med genveje til at åbne eller afslutte appen. macOS kan ved første start bede om tilladelse til at åbne en app fra en ukendt udvikler.
 
 Projektet er endnu ikke distribueret som en signeret eller notariseret `.pkg`-installation.
 
@@ -83,6 +83,8 @@ Dashboardet kan vise tre adresser:
 
 Lokalnetværks- og internetadresser indeholder et personligt token. Del ikke hele linket offentligt.
 
+Den lokale port gælder for hele installationen. Den kan ændres under **Indstillinger → Lokal server** og træder i kraft efter genstart. RosterMate opdaterer automatisk lokale kalenderlinks, Google callback-adresser og wizard-adressen til den valgte port.
+
 ### Offentlig HTTPS-adresse
 
 Kopiér den generiske proxykonfiguration til en lokal, ignoreret fil:
@@ -99,7 +101,7 @@ Mac’en skal have en reserveret lokal IP, domænet skal pege på routerens offe
 
 Den almindelige bruger vælger blot kalendernavnet — `RosterMate` foreslås automatisk — og trykker **Log ind med Google**. Efter godkendelsen opretter RosterMate selv en separat Google-kalender og gemmer dens ID lokalt under chaufførprofilen.
 
-App-ejeren skal konfigurere RosterMates fælles OAuth-klient én gang, før knappen kan bruges. Den anbefalede klienttype er **Desktop app**, som åbner Googles login i brugerens normale browser og vender tilbage til `http://localhost:8080/`:
+App-ejeren skal konfigurere RosterMates fælles OAuth-klient én gang, før knappen kan bruges. Den anbefalede klienttype er **Desktop app**, som åbner Googles login i brugerens normale browser og vender tilbage til `http://localhost:<valgt-port>/`:
 
 1. Aktivér Google Calendar API i Google Cloud.
 2. Konfigurér OAuth-samtykkeskærmen.
@@ -121,7 +123,7 @@ pytest -q
 Kontrollér serveren:
 
 ```bash
-curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:<valgt-port>/health
 ```
 
 Et gyldigt svar indeholder `"status":"ok"` og den installerede `"version"`.
@@ -134,6 +136,6 @@ Hver chaufførprofil opbevarer egne indstillinger, sessioner, kalenderfiler, his
 
 - Kontrollér internetforbindelsen, hvis Python eller Chromium ikke kan hentes automatisk.
 - Kør `./install.command` igen efter ændringer i `requirements.txt`.
-- Kontrollér at port 8080 ikke bruges af et andet program.
+- Hvis den valgte port er optaget, vælger RosterMate automatisk en ledig port ved næste start.
 - Forbind SelfService igen, hvis den gemte session ikke længere kan genautentificeres.
 - Kontrollér DNS, port forwarding og Caddy-loggen ved problemer med offentlig kalenderdeling.

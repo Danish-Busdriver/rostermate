@@ -18,20 +18,24 @@ if [ ! -x "$APP_ROOT/.venv/bin/python3" ]; then
 fi
 
 EXPECTED_VERSION="$(cd "$APP_ROOT" && .venv/bin/python3 -c 'import app; print(app.APP_VERSION)')"
-current_health="$(curl -fsS "http://127.0.0.1:8080/health" 2>/dev/null || true)"
+PORT="$(cd "$APP_ROOT" && .venv/bin/python3 port_config.py configured)"
+current_health="$(curl -fsS "http://127.0.0.1:$PORT/health" 2>/dev/null || true)"
 
 if printf '%s' "$current_health" | grep -q "\"version\":\"$EXPECTED_VERSION\""; then
-  server_pid="$(lsof -ti tcp:8080 2>/dev/null | head -1 || true)"
-  open "http://localhost:8080/wizard/" >/dev/null 2>&1 || true
+  server_pid="$(lsof -ti tcp:"$PORT" 2>/dev/null | head -1 || true)"
+  open "http://localhost:$PORT/wizard/" >/dev/null 2>&1 || true
   exec "$APP_ROOT/.venv/bin/python3" "$APP_ROOT/tray.py" --server-pid "${server_pid:-0}"
 fi
 
-if command -v lsof >/dev/null 2>&1; then
-  pids="$(lsof -ti tcp:8080 2>/dev/null || true)"
+if printf '%s' "$current_health" | grep -q '"status":"ok"' && command -v lsof >/dev/null 2>&1; then
+  pids="$(lsof -ti tcp:"$PORT" 2>/dev/null || true)"
   if [ -n "$pids" ]; then
     kill $pids 2>/dev/null || true
   fi
 fi
+
+PORT="$(cd "$APP_ROOT" && .venv/bin/python3 port_config.py ensure)"
+export ROSTERMATE_PORT="$PORT"
 
 (
   cd "$APP_ROOT"
@@ -40,14 +44,14 @@ fi
 server_pid=$!
 
 for _ in $(seq 1 60); do
-  health="$(curl -fsS "http://127.0.0.1:8080/health" 2>/dev/null || true)"
+  health="$(curl -fsS "http://127.0.0.1:$PORT/health" 2>/dev/null || true)"
   if printf '%s' "$health" | grep -q "\"version\":\"$EXPECTED_VERSION\""; then
-    open "http://localhost:8080/wizard/" >/dev/null 2>&1 || true
+    open "http://localhost:$PORT/wizard/" >/dev/null 2>&1 || true
     wait "$server_pid" 2>/dev/null || true
     exit 0
   fi
   sleep 1
 done
 
-osascript -e 'display alert "RosterMate kunne ikke starte" message "Den korrekte version svarede ikke på port 8080. Se loggen i Bibliotek/Logs/RosterMate.log." as critical' >/dev/null 2>&1 || true
+osascript -e "display alert \"RosterMate kunne ikke starte\" message \"Den korrekte version svarede ikke på port $PORT. Se loggen i Bibliotek/Logs/RosterMate.log.\" as critical" >/dev/null 2>&1 || true
 exit 1
