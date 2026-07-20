@@ -534,7 +534,7 @@ WIZARD_PREFERENCES_TEMPLATE = r'''
                         {% for day in preview %}
                         <div class="preview-card">
                             <strong>{{ day.weekday }}</strong>
-                            {% for item in day.items %}
+                            {% for item in day["items"] %}
                             <div>{{ item.title }}</div>
                             <div style="color: var(--muted); margin-top: 0.2rem;">{{ item.time_label }}</div>
                             {% endfor %}

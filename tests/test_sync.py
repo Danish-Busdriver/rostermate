@@ -289,3 +289,26 @@ def test_wizard_complete_persists_preferences_and_redirects(tmp_path, monkeypatc
     assert settings["keep_old_shifts"] is True
     assert settings["remove_old_shifts"] is False
     assert settings["wizard_completed"] is True
+
+
+def test_wizard_preferences_renders_shift_preview():
+    template = app_module.app.jinja_env.from_string(app_module.WIZARD_PREFERENCES_TEMPLATE)
+
+    rendered = template.render(
+        settings=app_module.with_setup_defaults({}),
+        preview=[
+            {
+                "weekday": "Mandag",
+                "items": [{"title": "Vagt 42", "time_label": "08:00–16:00"}],
+            }
+        ],
+        preview_count=1,
+        urls={
+            "wizard_complete_url": "/1234/wizard/complete",
+            "wizard_url": "/1234/wizard",
+            "wizard_test_connection_url": "/1234/wizard/test-connection",
+        },
+    )
+
+    assert "Vagt 42" in rendered
+    assert "08:00–16:00" in rendered
