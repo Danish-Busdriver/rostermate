@@ -1,0 +1,56 @@
+name: Build Windows installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "RosterMate version without leading v"
+        required: true
+        default: "1.4.0"
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install and test shared application
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pytest -q
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --no-progress -y
+          }
+
+      - name: Build Setup.exe
+        shell: powershell
+        run: |
+          $Compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & $Compiler "/DAppVersion=${{ inputs.version }}" "installer\windows\RosterMate.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate installer
+        shell: powershell
+        run: |
+          $Installer = "dist\windows\RosterMate-${{ inputs.version }}-Windows-Setup.exe"
+          if (-not (Test-Path $Installer)) { throw "Installer blev ikke oprettet" }
+          Get-Item $Installer | Format-List Name, Length, LastWriteTime
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RosterMate-${{ inputs.version }}-Windows-Setup
+          path: dist/windows/RosterMate-${{ inputs.version }}-Windows-Setup.exe
+          if-no-files-found: error
+          retention-days: 14

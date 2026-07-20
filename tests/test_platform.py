@@ -89,3 +89,16 @@ def test_windows_distribution_files_are_present():
     assert '"RosterMate.lnk"' in installer
     assert "auto_update.py" in launcher
     assert 'Invoke-WebRequest -UseBasicParsing -Uri "$AppUrl/health"' in launcher
+
+
+def test_windows_exe_installer_definition_is_present():
+    project_root = Path(__file__).resolve().parents[1]
+    installer = (project_root / "installer" / "windows" / "RosterMate.iss").read_text(encoding="utf-8")
+    workflow = (project_root / ".github" / "workflows" / "windows-installer.yml").read_text(encoding="utf-8")
+
+    assert "PrivilegesRequired=lowest" in installer
+    assert "install-windows.ps1" in installer
+    assert "run-windows.cmd" in installer
+    assert "[UninstallDelete]" in installer
+    assert "ISCC.exe" in workflow
+    assert "actions/upload-artifact@v4" in workflow

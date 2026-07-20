@@ -14,17 +14,14 @@ Markér **Add Python to PATH**, når Python installeres. Python Launcher `py.exe
 
 ## Anbefalet installation
 
-Åbn PowerShell og kør:
+1. Download `RosterMate-1.4.0-Windows-Setup.exe` fra den seneste GitHub Release.
+2. Dobbeltklik på installationsfilen.
+3. Vælg eventuelt en skrivebordsgenvej og gennemfør guiden.
+4. Lad installationsprogrammet installere RosterMates Python-afhængigheder og Chromium.
 
-```powershell
-git clone https://github.com/Danish-Busdriver/rostermate.git
-Set-Location rostermate
-.\install-windows.cmd
-```
+Installationsprogrammet placerer som standard appen under `%LOCALAPPDATA%\Programs\RosterMate`, opretter en Start-menu-genvej og registrerer en normal Windows-afinstallation.
 
-Du kan også dobbeltklikke på `install-windows.cmd` efter repositoryet er downloadet.
-
-Installationen:
+Setup.exe-installationen:
 
 - kontrollerer Python-versionen
 - opretter `.venv`
@@ -33,6 +30,10 @@ Installationen:
 - opretter den lokale `.env`-fil
 - opretter datamappen under `%LOCALAPPDATA%\RosterMate`
 - opretter en RosterMate-genvej i Start-menuen
+
+### Alternativ installation fra kildekode
+
+Udviklere kan fortsat klone repositoryet og køre `install-windows.cmd` manuelt.
 
 ## Start RosterMate
 
@@ -120,7 +121,7 @@ Kør den platformfælles testpakke:
 
 ## Kendte beta-begrænsninger
 
-- Installationen er endnu ikke signeret eller pakket som `.exe`/`.msi`.
+- Setup.exe er endnu ikke digitalt signeret, så SmartScreen kan vise en advarsel.
 - Der er endnu ikke et Windows-bakkeikon.
 - SmartScreen kan advare om de lokale scripts.
 - Windows-scripts og Task Scheduler-kommandoer er dækket af automatiske tests, men skal release-testes på rigtig Windows-hardware før en stabil Windows-udgivelse.
@@ -129,5 +130,5 @@ Kør den platformfælles testpakke:
 
 1. Deaktivér **Start automatisk ved login** i RosterMate.
 2. Luk den lokale Python-proces.
-3. Slet den klonede programmappe.
+3. Åbn **Installerede apps** i Windows og afinstaller RosterMate.
 4. Slet `%LOCALAPPDATA%\RosterMate`, hvis kalenderdata, profiler og backups også skal fjernes.
