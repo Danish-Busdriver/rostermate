@@ -3,19 +3,46 @@ Set-StrictMode -Version Latest
 
 $ProjectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $ProjectDir
+$PythonVersion = "3.13.9"
 
-if (-not (Get-Command py.exe -ErrorAction SilentlyContinue)) {
-    throw "Python Launcher (py.exe) blev ikke fundet. Installer Python 3.12 eller nyere fra python.org og markér 'Add Python to PATH'."
+function Find-RosterMatePython {
+    $Candidates = @()
+    $Launcher = Get-Command py.exe -ErrorAction SilentlyContinue
+    if ($Launcher) {
+        try {
+            $PathFromLauncher = & py.exe -3 -c "import sys; print(sys.executable)" 2>$null
+            if ($LASTEXITCODE -eq 0) { $Candidates += $PathFromLauncher }
+        } catch {}
+    }
+    $Candidates += @(
+        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python313\python.exe"),
+        (Join-Path $env:ProgramFiles "Python313\python.exe")
+    )
+    foreach ($Candidate in $Candidates) {
+        if ($Candidate -and (Test-Path $Candidate)) {
+            & $Candidate -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)"
+            if ($LASTEXITCODE -eq 0) { return $Candidate }
+        }
+    }
+    return $null
 }
 
-$PythonVersion = & py.exe -3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
-if ([version]$PythonVersion -lt [version]"3.12") {
-    throw "RosterMate kræver Python 3.12 eller nyere. Fundet version: $PythonVersion"
+$SystemPython = Find-RosterMatePython
+if (-not $SystemPython) {
+    $InstallerPath = Join-Path $env:TEMP "rostermate-python-$PythonVersion-amd64.exe"
+    $DownloadUrl = "https://www.python.org/ftp/python/$PythonVersion/python-$PythonVersion-amd64.exe"
+    Write-Host "Henter Python $PythonVersion fra python.org..."
+    Invoke-WebRequest -UseBasicParsing -Uri $DownloadUrl -OutFile $InstallerPath
+    $Process = Start-Process -FilePath $InstallerPath -ArgumentList "/quiet InstallAllUsers=0 PrependPath=1 Include_launcher=1 Include_test=0" -Wait -PassThru
+    Remove-Item $InstallerPath -Force -ErrorAction SilentlyContinue
+    if ($Process.ExitCode -ne 0) { throw "Python-installationen fejlede med kode $($Process.ExitCode)." }
+    $SystemPython = Find-RosterMatePython
+    if (-not $SystemPython) { throw "Python blev installeret, men kunne ikke findes bagefter." }
 }
 
 if (-not (Test-Path ".venv\Scripts\python.exe")) {
     Write-Host "Opretter virtuelt Python-miljø..."
-    & py.exe -3 -m venv .venv
+    & $SystemPython -m venv .venv
 }
 
 $VenvPython = Join-Path $ProjectDir ".venv\Scripts\python.exe"
@@ -39,6 +66,7 @@ $Shortcut = $Shell.CreateShortcut($ShortcutPath)
 $Shortcut.TargetPath = Join-Path $ProjectDir "run-windows.cmd"
 $Shortcut.WorkingDirectory = $ProjectDir
 $Shortcut.Description = "Start RosterMate"
+$Shortcut.IconLocation = Join-Path $ProjectDir "assets\RosterMate.ico"
 $Shortcut.Save()
 
 Write-Host ""
