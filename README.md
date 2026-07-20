@@ -24,6 +24,7 @@ Et lokalt macOS-projekt til at hjælpe buschauffører med at holde styr på vagt
 RosterMate er et simpelt og stabilt værktøj til at håndtere buschaufførers vagter.
 
 Opsætningsguidens præferenceside viser den hentede vagtoversigt direkte efter den første synkronisering.
+Når guiden færdiggøres, fortsætter den direkte til dashboardet uden at genstarte den aktive lokale server.
 
 Projektet er bygget som en lokal macOS-webapp i Python og Flask, så det kan udvikles og bruges uden at kræve en cloud-løsning. Formålet er at gøre det lettere at:
 

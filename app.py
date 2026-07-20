@@ -1287,6 +1287,7 @@ def wizard_complete(driver_id: str) -> Any:
         bool(updated_settings.get("launch_at_login", False)),
         BASE_DIR,
         paths["output_dir"],
+        reload_agent=False,
     )
     return redirect(driver_urls(safe_driver_id)["dashboard_url"])
 

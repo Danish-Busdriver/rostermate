@@ -40,27 +40,42 @@ def _run_launchctl(command: list[str]) -> None:
     subprocess.run(command, check=False, capture_output=True, text=True)
 
 
-def install_launch_agent(driver_id: str, project_dir: Path, output_dir: Path, home_dir: Path | None = None) -> Path:
+def install_launch_agent(
+    driver_id: str,
+    project_dir: Path,
+    output_dir: Path,
+    home_dir: Path | None = None,
+    reload_agent: bool = True,
+) -> Path:
     plist_path = launch_agent_path(driver_id, home_dir)
     plist_path.parent.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
     payload = build_launch_agent_plist(driver_id, project_dir, output_dir)
     with plist_path.open("wb") as handle:
         plistlib.dump(payload, handle)
-    _run_launchctl(["launchctl", "unload", str(plist_path)])
-    _run_launchctl(["launchctl", "load", "-w", str(plist_path)])
+    if reload_agent:
+        _run_launchctl(["launchctl", "unload", str(plist_path)])
+        _run_launchctl(["launchctl", "load", "-w", str(plist_path)])
     return plist_path
 
 
-def remove_launch_agent(driver_id: str, home_dir: Path | None = None) -> Path:
+def remove_launch_agent(driver_id: str, home_dir: Path | None = None, reload_agent: bool = True) -> Path:
     plist_path = launch_agent_path(driver_id, home_dir)
     if plist_path.exists():
-        _run_launchctl(["launchctl", "unload", "-w", str(plist_path)])
+        if reload_agent:
+            _run_launchctl(["launchctl", "unload", "-w", str(plist_path)])
         plist_path.unlink()
     return plist_path
 
 
-def sync_launch_agent_preference(driver_id: str, enabled: bool, project_dir: Path, output_dir: Path, home_dir: Path | None = None) -> Path:
+def sync_launch_agent_preference(
+    driver_id: str,
+    enabled: bool,
+    project_dir: Path,
+    output_dir: Path,
+    home_dir: Path | None = None,
+    reload_agent: bool = True,
+) -> Path:
     if enabled:
-        return install_launch_agent(driver_id, project_dir, output_dir, home_dir)
-    return remove_launch_agent(driver_id, home_dir)
+        return install_launch_agent(driver_id, project_dir, output_dir, home_dir, reload_agent)
+    return remove_launch_agent(driver_id, home_dir, reload_agent)
