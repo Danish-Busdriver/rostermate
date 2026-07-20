@@ -2928,17 +2928,13 @@ def google_connect(driver_id: str) -> Any:
     settings["google_calendar_name"] = calendar_name
     save_driver_settings(safe_driver_id, settings)
     google_status = google_integration_status(settings, safe_driver_id, paths["google_token_path"], request.url_root)
-    if not google_status["client_id_valid"]:
-        return redirect(
-            url_for(
-                "settings_page",
-                driver_id=safe_driver_id,
-                notice="OAuth Client ID er ugyldigt. Opret en Web application-klient i Google Cloud og indsæt det fulde ID, som slutter med .apps.googleusercontent.com.",
-                notice_type="error",
-            )
-        )
     if not google_status["credentials_ready"]:
-        return redirect(url_for("settings_page", driver_id=safe_driver_id, notice="Gem først Google Client ID og Client Secret", notice_type="warning"))
+        notice = (
+            "Google OAuth JSON-filen kunne ikke læses eller er ugyldig."
+            if str(settings.get("google_oauth_client_file") or "").strip()
+            else "Konfigurér en Google Desktop OAuth JSON-fil før login."
+        )
+        return redirect(url_for("settings_page", driver_id=safe_driver_id, notice=notice, notice_type="warning"))
 
     google_available, dependency_error = google_dependencies_available()
     if not google_available:
