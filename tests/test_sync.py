@@ -5,7 +5,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app as app_module
-from app import build_event_from_shift, list_driver_ids, navigate_selfservice_month, open_selfservice_calendar, parse_selfservice_calendar_pages, select_next_calendar_events, software_info, sync_schedule, valid_google_client_id, write_outputs
+from app import build_event_from_shift, list_driver_ids, navigate_selfservice_month, open_selfservice_calendar, parse_selfservice_calendar_pages, perform_background_selfservice_login, select_next_calendar_events, software_info, sync_schedule, valid_google_client_id, write_outputs
 from sync import fetch_status_is_error, run_initial_sync
 
 
@@ -182,6 +182,73 @@ def test_selfservice_calendar_reports_expired_session_before_navigation():
         assert "sessionen er udløbet" in str(exc)
     else:
         raise AssertionError("An expired SelfService session should be reported")
+
+
+def test_background_login_uses_fields_and_waits_for_authenticated_marker():
+    class Locator:
+        first = None
+
+        def __init__(self, page, selector):
+            self.page = page
+            self.selector = selector
+            self.first = self
+
+        def count(self):
+            return 0 if self.page.authenticated else 2
+
+        def fill(self, value):
+            self.page.filled[self.selector] = value
+
+        def click(self, **_kwargs):
+            self.page.authenticated = True
+
+    class Page:
+        def __init__(self):
+            self.authenticated = False
+            self.filled = {}
+
+        def locator(self, selector):
+            return Locator(self, selector)
+
+        def wait_for_function(self, *_args, **_kwargs):
+            pass
+
+    page = Page()
+    perform_background_selfservice_login(page, {"user": "tester", "pass": "secret"})
+
+    assert page.filled == {"input#Username": "tester", "input#Password": "secret"}
+    assert page.authenticated is True
+
+
+def test_background_login_reports_rejected_credentials():
+    class Locator:
+        first = None
+
+        def __init__(self):
+            self.first = self
+
+        def count(self):
+            return 2
+
+        def fill(self, _value):
+            pass
+
+        def click(self, **_kwargs):
+            pass
+
+    class Page:
+        def locator(self, _selector):
+            return Locator()
+
+        def wait_for_function(self, *_args, **_kwargs):
+            pass
+
+    try:
+        perform_background_selfservice_login(Page(), {"user": "tester", "pass": "wrong"})
+    except RuntimeError as exc:
+        assert "afviste login" in str(exc)
+    else:
+        raise AssertionError("Rejected credentials should produce an actionable error")
 
 
 def test_write_outputs_creates_rfc5545_calendar(tmp_path):

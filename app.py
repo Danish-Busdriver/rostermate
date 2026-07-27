@@ -64,7 +64,7 @@ GOOGLE_TOKEN_PATH = DATA_DIR / "google_token.json"
 GOOGLE_SYNC_STATE_PATH = DATA_DIR / "google_sync_state.json"
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar"]
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.9.1"
+APP_VERSION = "1.9.2"
 SYNC_LOCKS: dict[str, threading.Lock] = {}
 SYNC_LOCKS_GUARD = threading.Lock()
 
@@ -1214,6 +1214,46 @@ def navigate_selfservice_month(page: Any, target_year: int, target_month: int) -
     raise RuntimeError(f"SelfService kunne ikke navigere til {target_month:02d}/{target_year}")
 
 
+def selfservice_login_form_visible(page: Any) -> bool:
+    return page.locator("input#Username, input#Password").count() > 0
+
+
+def perform_background_selfservice_login(page: Any, settings: dict[str, Any]) -> None:
+    username = str(settings.get("user", "") or "").strip()
+    password = str(settings.get("pass", "") or "")
+    if not username or not password:
+        raise RuntimeError(
+            "De gemte SelfService-loginoplysninger mangler. Indtast brugernavn og adgangskode i opsætningsguiden."
+        )
+
+    page.locator("input#Username").fill(username)
+    page.locator("input#Password").fill(password)
+    login_button = page.locator(
+        "#LoginButton, div.DarkButton, button[type='submit'], input[type='submit']"
+    ).first
+    try:
+        login_button.click(timeout=15000)
+    except Exception as exc:
+        raise RuntimeError("SelfService-login-knappen kunne ikke aktiveres.") from exc
+
+    try:
+        page.wait_for_function(
+            """() => Boolean(
+                document.querySelector('#Calendar')
+                || document.querySelector('#NextMonth')
+                || document.querySelector("input[type='checkbox'][id*='View']")
+                || document.querySelector('.validation-summary-errors, .field-validation-error, .error')
+            )""",
+            timeout=30000,
+        )
+    except Exception:
+        pass
+    if selfservice_login_form_visible(page):
+        raise RuntimeError(
+            "SelfService afviste login eller sendte tilbage til login-siden. Kontrollér brugernavn og adgangskode i opsætningsguiden."
+        )
+
+
 def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[dict[str, Any]], str]:
     paths = get_driver_paths(driver_id)
     settings = load_settings(driver_id)
@@ -1244,42 +1284,8 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
             with debug_path.open("w", encoding="utf-8") as f:
                 f.write(initial_html[:10000])
 
-            if "Username" in initial_html or "Password" in initial_html:
-                if not settings.get("user") or not settings.get("pass"):
-                    context.close()
-                    if browser is not None:
-                        browser.close()
-                    return [], "SelfService-sessionen er udløbet, og gemte loginoplysninger mangler. Forbind via opsætningsguiden igen."
-
-                page.fill("input#Username", settings["user"])
-                page.fill("input#Password", settings["pass"])
-
-                selectors_to_try = [
-                    "#LoginButton",
-                    "div.DarkButton",
-                    "button[type='submit']",
-                    "input[type='submit']",
-                ]
-
-                clicked = False
-                for selector in selectors_to_try:
-                    try:
-                        page.click(selector, timeout=5000)
-                        clicked = True
-                        break
-                    except:
-                        pass
-
-                if not clicked:
-                    context.close()
-                    if browser is not None:
-                        browser.close()
-                    return [], "Kunne ikke finde login-knap"
-
-                try:
-                    page.wait_for_url("**/Assignments**", timeout=15000)
-                except:
-                    pass
+            if selfservice_login_form_visible(page):
+                perform_background_selfservice_login(page, settings)
 
                 try:
                     page.wait_for_selector("#Loading", state="hidden", timeout=15000)
@@ -1320,6 +1326,14 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
             try:
                 open_selfservice_calendar(page, settings["url"])
             except Exception as exc:
+                if selfservice_login_form_visible(page):
+                    try:
+                        perform_background_selfservice_login(page, settings)
+                        open_selfservice_calendar(page, settings["url"])
+                    except Exception as retry_exc:
+                        exc = retry_exc
+                if not isinstance(exc, RuntimeError):
+                    exc = RuntimeError("SelfService viste ikke arbejdskalenderen efter login.")
                 context.close()
                 if browser is not None:
                     browser.close()
@@ -1563,6 +1577,8 @@ def wizard_connect(driver_id: str) -> tuple[Any, int]:
     if supplied_password:
         try:
             set_password(safe_driver_id, supplied_password)
+            if get_password(safe_driver_id) != supplied_password:
+                raise RuntimeError("adgangskoden kunne ikke læses tilbage efter lagring")
         except Exception as exc:
             return jsonify({
                 "status": "error",
@@ -3175,6 +3191,8 @@ def settings_route(driver_id: str) -> tuple[Any, int]:
     if submitted_password:
         try:
             set_password(safe_driver_id, submitted_password)
+            if get_password(safe_driver_id) != submitted_password:
+                raise RuntimeError("adgangskoden kunne ikke læses tilbage efter lagring")
         except Exception as exc:
             return jsonify({
                 "status": "error",
