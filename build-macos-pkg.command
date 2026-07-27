@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-VERSION="${1:-1.7.2}"
+VERSION="${1:-1.7.3}"
 BUILD_PARENT="$SCRIPT_DIR/dist/.pkg-build"
 mkdir -p "$BUILD_PARENT"
 BUILD_DIR="$(mktemp -d "$BUILD_PARENT/rostermate-pkg.XXXXXX")"
@@ -45,7 +45,7 @@ chmod +x "$SCRIPT_DIR/installer/macos/scripts/postinstall"
   "$COMPONENT_PKG"
 
 cp "$SCRIPT_DIR/installer/macos/distribution.xml" "$BUILD_DIR/distribution.xml"
-sed -i '' "s/version=\"1.7.2\"/version=\"$VERSION\"/" "$BUILD_DIR/distribution.xml"
+sed -i '' "s/version=\"1.7.3\"/version=\"$VERSION\"/" "$BUILD_DIR/distribution.xml"
 
 /usr/bin/productbuild \
   --distribution "$BUILD_DIR/distribution.xml" \

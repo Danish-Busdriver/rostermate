@@ -6,7 +6,7 @@ on:
       version:
         description: "RosterMate version without leading v"
         required: true
-        default: "1.7.2"
+        default: "1.7.3"
 
 jobs:
   build:
@@ -58,15 +58,12 @@ jobs:
           if (Test-Path (Join-Path $InstallDir "RosterMate.app")) { throw "Windows-pakken indeholder macOS-appen" }
           if (Test-Path (Join-Path $InstallDir "install.command")) { throw "Windows-pakken indeholder macOS-installationsfiler" }
 
-          # Genskab præcis den rapporterede fejl og bekræft selvreparationen.
+          # Genskab præcis den rapporterede fejl. Den normale startfil skal selv reparere den.
           Remove-Item (Join-Path $InstallDir ".venv\pyvenv.cfg") -Force
-          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $InstallDir "install-windows.ps1")
-          if ($LASTEXITCODE -ne 0) { throw "Reparation af et miljø uden pyvenv.cfg fejlede" }
-          if (-not (Test-Path (Join-Path $InstallDir ".venv\pyvenv.cfg"))) { throw "pyvenv.cfg blev ikke genskabt" }
-
           $env:ROSTERMATE_NO_BROWSER = "1"
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $InstallDir "run-windows.ps1")
           if ($LASTEXITCODE -ne 0) { throw "Den installerede RosterMate-start fejlede" }
+          if (-not (Test-Path (Join-Path $InstallDir ".venv\pyvenv.cfg"))) { throw "Startfilen genskabte ikke pyvenv.cfg" }
 
           $Python = Join-Path $InstallDir ".venv\Scripts\python.exe"
           $Port = & $Python (Join-Path $InstallDir "port_config.py") configured

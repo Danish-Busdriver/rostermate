@@ -99,6 +99,10 @@ def test_windows_distribution_files_are_present():
     assert 'Join-Path $env:LOCALAPPDATA "RosterMate"' in installer
     assert '"RosterMate.lnk"' in installer
     assert "windows_launcher.py" in launcher
+    assert 'Join-Path $ProjectDir ".venv\\pyvenv.cfg"' in launcher
+    assert "Test-RosterMateVenv" in launcher
+    assert 'Join-Path $ProjectDir "install-windows.ps1"' in launcher
+    assert "Reparerer automatisk" in launcher
     windows_launcher = (project_root / "windows_launcher.py").read_text(encoding="utf-8")
     assert "auto_update.py" in windows_launcher
     assert "ensure_available_port" in windows_launcher
@@ -119,6 +123,7 @@ def test_windows_exe_installer_definition_is_present():
     assert "actions/upload-artifact@v4" in workflow
     assert "Install and launch packaged application" in workflow
     assert "Tray-ikonprocessen kører ikke" in workflow
+    assert "Startfilen genskabte ikke pyvenv.cfg" in workflow
     assert "SetupIconFile=" in installer
     assert "RosterMate.ico" in installer
     assert "Afinstaller RosterMate" in installer

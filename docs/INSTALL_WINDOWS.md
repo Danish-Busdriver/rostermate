@@ -10,14 +10,14 @@ Windows-udgaven bruger samme dashboard, SelfService-synkronisering, profiler, hi
 
 ## Anbefalet installation
 
-1. Download `RosterMate-1.7.2-Windows-Setup.exe` fra den seneste GitHub Release.
+1. Download `RosterMate-1.7.3-Windows-Setup.exe` fra den seneste GitHub Release.
 2. Dobbeltklik på installationsfilen.
 3. Vælg eventuelt en skrivebordsgenvej og gennemfør guiden.
 4. Lad installationsprogrammet hente Python, RosterMates afhængigheder og Chromium.
 
 Installationsprogrammet placerer som standard appen under `%LOCALAPPDATA%\Programs\RosterMate`, opretter en Start-menu-genvej og registrerer en normal Windows-afinstallation.
 
-Setup.exe kontrollerer både `pyvenv.cfg` og Python-miljøets funktion før start. Et manglende, flyttet eller forældet miljø fjernes og opbygges automatisk igen. Windows-pakken indeholder ikke macOS-app, `.command`-filer eller macOS-installationsdata.
+Setup.exe kontrollerer både `pyvenv.cfg` og Python-miljøets funktion. Den normale Start-menu-genvej udfører samme kontrol ved hver start. Et manglende, flyttet eller forældet miljø fjernes og opbygges automatisk igen, før RosterMate fortsætter. Windows-pakken indeholder ikke macOS-app, `.command`-filer eller macOS-installationsdata.
 
 Setup.exe-installationen:
 

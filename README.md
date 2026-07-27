@@ -38,6 +38,7 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 - Køre den samme GUI og synkroniseringsmotor på macOS og Windows
 - Klargøre en ny Mac-installation automatisk og åbne opsætningsguiden ved første start
 - Hente Python, app-afhængigheder og SelfService-browseren automatisk under installationen
+- Reparere et manglende eller beskadiget Windows Python-miljø automatisk ved normal start
 - Vise RosterMate-logoet i Mac-menulinjen eller Windows-systembakken, mens appen kører
 - Vælge en ledig lokal port automatisk og lade porten ændres senere under Indstillinger
 
@@ -105,8 +106,8 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 
 ## Installation
 
-- [Download RosterMate PKG til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.7.2-macOS.pkg)
-- [Download RosterMate Setup.exe til Windows (beta)](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.7.2-Windows-Setup.exe)
+- [Download RosterMate PKG til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.7.3-macOS.pkg)
+- [Download RosterMate Setup.exe til Windows (beta)](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.7.3-Windows-Setup.exe)
 
 Begge platforme har en tydelig afinstallationskommando. Har du brug for hjælp, finder du de separate vejledninger til [macOS](docs/INSTALL_MACOS.md) og [Windows](docs/INSTALL_WINDOWS.md).
 
