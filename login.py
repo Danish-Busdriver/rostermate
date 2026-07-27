@@ -16,6 +16,9 @@ TRANSIENT_NAVIGATION_ERRORS = (
     "execution context was destroyed",
 )
 
+LOGIN_FIELD_SELECTOR = "input#Username, input#Password"
+AUTHENTICATED_MARKER_SELECTOR = "#Calendar, #NextMonth, input[type='checkbox'][id*='View']"
+
 
 def read_stable_page_content(page: Any, attempts: int = 8) -> str | None:
     """Read page HTML without failing while an SSO redirect is in progress."""
@@ -30,6 +33,23 @@ def read_stable_page_content(page: Any, attempts: int = 8) -> str | None:
             except Exception:
                 page.wait_for_timeout(250)
     return None
+
+
+def detect_selfservice_login_state(page: Any) -> str:
+    """Detect login state without reading or serializing the complete page."""
+    try:
+        current_url = str(page.url)
+        if page.locator(LOGIN_FIELD_SELECTOR).count() > 0:
+            return "login"
+        if "assignments" in current_url.casefold():
+            return "authenticated"
+        if page.locator(AUTHENTICATED_MARKER_SELECTOR).count() > 0:
+            return "authenticated"
+        return "unknown"
+    except Exception as exc:
+        if any(message in str(exc).lower() for message in TRANSIENT_NAVIGATION_ERRORS):
+            return "unknown"
+        raise
 
 
 def launch_authenticated_context(
@@ -154,19 +174,17 @@ class SelfServiceLoginManager:
                 browser, context = launch_authenticated_context(playwright, session_store, headless=True)
                 page = context.new_page()
                 page.set_default_timeout(20000)
-                page.goto(login_url, wait_until="load")
-                html = read_stable_page_content(page)
-                if html is None:
-                    return False, "SelfService navigerer stadig. Vent et øjeblik og test forbindelsen igen."
-                logged_in = (
-                    "Username" not in html
-                    and "Password" not in html
-                    and ("Assignments" in page.url or "Arbejdskalender" in html)
-                )
+                page.goto(login_url, wait_until="domcontentloaded")
+                login_state = "unknown"
+                for _ in range(20):
+                    login_state = detect_selfservice_login_state(page)
+                    if login_state != "unknown":
+                        break
+                    page.wait_for_timeout(250)
                 context.close()
                 if browser is not None:
                     browser.close()
-                if logged_in:
+                if login_state == "authenticated":
                     return True, "Forbindelsen virker. SelfService-sessionen er stadig gyldig."
                 return False, "SelfService-sessionen ser ud til at være udløbet. Log ind igen via wizard-guiden."
         except Exception as exc:
@@ -193,28 +211,19 @@ class SelfServiceLoginManager:
                     viewport={"width": 1280, "height": 860},
                 )
                 page = context.pages[0] if context.pages else context.new_page()
-                page.goto(login_url, wait_until="load")
+                page.goto(login_url, wait_until="domcontentloaded")
                 self.update(flow_id, state="awaiting_login", message="Venter på at du logger ind i SelfService…")
 
                 deadline = time.time() + 900
                 while time.time() < deadline:
-                    current_html = read_stable_page_content(page)
-                    if current_html is None:
-                        page.wait_for_timeout(500)
-                        continue
-                    logged_in = (
-                        "Username" not in current_html
-                        and "Password" not in current_html
-                        and ("Assignments" in page.url or "Arbejdskalender" in current_html)
-                    )
-                    if logged_in:
+                    if detect_selfservice_login_state(page) == "authenticated":
                         save_session_storage(page, session_store)
                         context.storage_state(path=str(session_store.storage_state_path), indexed_db=True)
                         context.close()
                         context = None
                         self.update(flow_id, state="connected", message="Forbundet til SelfService")
                         return
-                    page.wait_for_timeout(1000)
+                    page.wait_for_timeout(500)
 
             self.update(flow_id, state="error", message="Login timed out. Prøv igen.")
         except Exception as exc:

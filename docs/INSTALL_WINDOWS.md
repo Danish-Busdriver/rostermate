@@ -10,7 +10,7 @@ Windows-udgaven bruger samme dashboard, SelfService-synkronisering, profiler, hi
 
 ## Anbefalet installation
 
-1. Download `RosterMate-1.7.1-Windows-Setup.exe` fra den seneste GitHub Release.
+1. Download `RosterMate-1.7.2-Windows-Setup.exe` fra den seneste GitHub Release.
 2. Dobbeltklik på installationsfilen.
 3. Vælg eventuelt en skrivebordsgenvej og gennemfør guiden.
 4. Lad installationsprogrammet hente Python, RosterMates afhængigheder og Chromium.
@@ -136,9 +136,12 @@ Kør den platformfælles testpakke:
 ## Kendte beta-begrænsninger
 
 - Setup.exe er endnu ikke digitalt signeret, så SmartScreen kan vise en advarsel.
-- Der er endnu ikke et Windows-bakkeikon.
 - SmartScreen kan advare om de lokale scripts.
 - Windows-scripts og Task Scheduler-kommandoer er dækket af automatiske tests, men skal release-testes på rigtig Windows-hardware før en stabil Windows-udgivelse.
+
+## Lokale loginoplysninger
+
+Under det synlige SelfService-login kontrollerer RosterMate kun URL’en og få login-/kalendermarkører. Hele sidens HTML læses ikke i loginvinduet. Efter godkendelsen gemmes browserens cookies og nødvendige lokale sessionsdata på computeren, vinduet lukkes, og selve vagtindlæsningen udføres separat i baggrunden.
 
 ## Afinstallation
 

@@ -11,7 +11,7 @@ Denne guide indeholder installation, opdatering og teknisk drift af RosterMate p
 
 ## Anbefalet installation
 
-Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.7.1-macOS.pkg`, og dobbeltklik på filen. Du behøver ikke åbne Terminal.
+Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.7.2-macOS.pkg`, og dobbeltklik på filen. Du behøver ikke åbne Terminal.
 
 Installationsprogrammet placerer RosterMate i **Programmer**, kontrollerer en kompatibel officiel Python-version, opretter appens eget isolerede miljø og installerer alle Python-afhængigheder samt Chromium-browseren til SelfService. macOS beder om administratorgodkendelse. RosterMate bruger port 8080, hvis den er ledig; ellers vælges automatisk den første ledige port frem til 8179. Efter installationen starter appen og åbner opsætningsguiden automatisk på den valgte port. Første installation kan tage et par minutter.
 
@@ -145,6 +145,8 @@ Et gyldigt svar indeholder `"status":"ok"` og den installerede `"version"`.
 ## Lokale data
 
 Hver chaufførprofil opbevarer egne indstillinger, sessioner, kalenderfiler, historik og backups under installationens `data/`, `output/` og `backups/`-mapper. Disse mapper er Git-ignorerede og må ikke publiceres.
+
+Under det synlige SelfService-login kontrollerer RosterMate kun URL’en og få login-/kalendermarkører. Hele sidens HTML læses ikke i loginvinduet. Efter godkendelsen gemmes browserens cookies og nødvendige lokale sessionsdata på computeren, vinduet lukkes, og selve vagtindlæsningen udføres separat i baggrunden.
 
 ## Fejlfinding
 

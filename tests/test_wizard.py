@@ -6,7 +6,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app as app_module
 import launch_agent as launch_agent_module
-from login import launch_authenticated_context, read_stable_page_content, restore_session_storage, save_session_storage
+from login import (
+    detect_selfservice_login_state,
+    launch_authenticated_context,
+    read_stable_page_content,
+    restore_session_storage,
+    save_session_storage,
+)
 from session import SelfServiceSessionStore
 
 
@@ -64,6 +70,36 @@ def test_read_stable_page_content_reraises_non_navigation_errors():
         assert str(exc) == "Browser process closed"
     else:
         raise AssertionError("Expected the non-navigation error to be re-raised")
+
+
+class MarkerLocator:
+    def __init__(self, count: int) -> None:
+        self._count = count
+
+    def count(self) -> int:
+        return self._count
+
+
+class LoginMarkerPage:
+    def __init__(self, url: str, *, login_fields: int = 0, authenticated_markers: int = 0) -> None:
+        self.url = url
+        self.login_fields = login_fields
+        self.authenticated_markers = authenticated_markers
+
+    def locator(self, selector: str) -> MarkerLocator:
+        if "Username" in selector:
+            return MarkerLocator(self.login_fields)
+        return MarkerLocator(self.authenticated_markers)
+
+    def content(self) -> str:
+        raise AssertionError("Login detection must not read the complete page HTML")
+
+
+def test_login_detection_uses_only_url_and_small_dom_markers():
+    assert detect_selfservice_login_state(LoginMarkerPage("https://example/Account/Login", login_fields=2)) == "login"
+    assert detect_selfservice_login_state(LoginMarkerPage("https://example/Assignments")) == "authenticated"
+    assert detect_selfservice_login_state(LoginMarkerPage("https://example/home", authenticated_markers=1)) == "authenticated"
+    assert detect_selfservice_login_state(LoginMarkerPage("https://example/loading")) == "unknown"
 
 
 def test_launch_authenticated_context_reuses_persistent_driver_profile(tmp_path):
