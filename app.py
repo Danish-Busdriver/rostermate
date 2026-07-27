@@ -64,7 +64,7 @@ GOOGLE_TOKEN_PATH = DATA_DIR / "google_token.json"
 GOOGLE_SYNC_STATE_PATH = DATA_DIR / "google_sync_state.json"
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar"]
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.9.0"
+APP_VERSION = "1.9.1"
 SYNC_LOCKS: dict[str, threading.Lock] = {}
 SYNC_LOCKS_GUARD = threading.Lock()
 
@@ -256,6 +256,12 @@ def _coerce_bool(value: Any, default: bool = False) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def remove_env_secret(env_path: Path, key_to_remove: str) -> None:
+    lines = env_path.read_text(encoding="utf-8").splitlines()
+    kept = [line for line in lines if line.split("=", 1)[0].strip() != key_to_remove]
+    env_path.write_text("\n".join(kept).rstrip() + "\n", encoding="utf-8")
+
+
 def load_settings(driver_id: str) -> dict[str, Any]:
     paths = get_driver_paths(driver_id)
     env_values = {}
@@ -278,6 +284,15 @@ def load_settings(driver_id: str) -> dict[str, Any]:
         else:
             stored = {key: value for key, value in stored.items() if key != "pass"}
             save_json(paths["settings_path"], stored)
+    env_password = str(env_values.get("SELFSERVICE_PASS", "") or "")
+    if env_password:
+        try:
+            set_password(driver_id, env_password)
+        except Exception:
+            pass
+        else:
+            remove_env_secret(env_path, "SELFSERVICE_PASS")
+            env_values.pop("SELFSERVICE_PASS", None)
     try:
         days_ahead = int(env_values.get("DAYS_AHEAD", stored.get("days_ahead", 7)))
     except (TypeError, ValueError):
@@ -296,7 +311,7 @@ def load_settings(driver_id: str) -> dict[str, Any]:
         **stored,
         "url": env_values.get("SELFSERVICE_URL", stored.get("url", "https://selfservicedanmark.tidebus.dk")),
         "user": env_values.get("SELFSERVICE_USER", stored.get("user", "")),
-        "pass": env_values.get("SELFSERVICE_PASS", get_password(driver_id) or stored.get("pass", "")),
+        "pass": get_password(driver_id) or stored.get("pass", ""),
         "days_ahead": max(1, min(days_ahead, 365)),
         "run_every_minutes": max(1, min(run_every_minutes, 10080)),
         "remove_old_shifts": _coerce_bool(env_values.get("REMOVE_OLD_SHIFTS", stored.get("remove_old_shifts", False))),

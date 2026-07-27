@@ -570,6 +570,26 @@ def test_settings_route_persists_selfservice_credentials(tmp_path, monkeypatch):
     assert "pass" not in app_module.load_json(tmp_path / "data" / "1234" / "settings.json", {})
 
 
+def test_load_settings_migrates_env_password_to_secure_store(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
+    monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
+    (tmp_path / ".env").write_text(
+        "SELFSERVICE_USER=tester\nSELFSERVICE_PASS=legacy-secret\nDAYS_AHEAD=30\n",
+        encoding="utf-8",
+    )
+    passwords = {}
+    monkeypatch.setattr(app_module, "set_password", lambda driver_id, password: passwords.__setitem__(driver_id, password))
+    monkeypatch.setattr(app_module, "get_password", lambda driver_id: passwords.get(driver_id, ""))
+
+    settings = app_module.load_settings("1234")
+
+    assert settings["pass"] == "legacy-secret"
+    assert passwords == {"1234": "legacy-secret"}
+    assert "SELFSERVICE_PASS" not in (tmp_path / ".env").read_text(encoding="utf-8")
+
+
 def test_new_driver_redirects_to_wizard(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "BASE_DIR", tmp_path)
     monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
