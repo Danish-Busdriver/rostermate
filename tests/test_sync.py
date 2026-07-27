@@ -18,6 +18,9 @@ def test_build_event_from_shift_handles_regular_and_all_day_shifts():
     holiday = build_event_from_shift({"id": "Fri", "from": "", "to": ""}, "2026-07-10")
     assert holiday["all_day"] is True
     assert holiday["start"].startswith("2026-07-10")
+    assert regular["id"] != build_event_from_shift(
+        {"id": "DO_afløs", "from": "05:15", "to": "13:02"}, "2026-07-09"
+    )["id"]
 
 
 def test_selfservice_parser_combines_months_and_uses_exact_workday_dates():
@@ -378,6 +381,45 @@ def test_sync_schedule_does_not_duplicate_existing_events(tmp_path):
     assert len(updated_events) == 1
     assert updated_events[0]["id"] == "same-event"
     assert changes == []
+
+
+def test_sync_schedule_replaces_stale_events_inside_next_month_window(tmp_path):
+    existing_events = [
+        {
+            "id": "old-vacation",
+            "title": "Vacation",
+            "date": "2026-08-05",
+            "start": "2026-08-05T00:00:00",
+            "end": "2026-08-05T23:59:59",
+            "all_day": True,
+        }
+    ]
+    new_events = [
+        build_event_from_shift({"id": "Ops3", "from": "09:05", "to": "16:54"}, "2026-08-05")
+    ]
+
+    updated_events, _changes = sync_schedule(
+        existing_events,
+        new_events,
+        "2026-07-27",
+        "2026-08-26",
+        False,
+        tmp_path,
+    )
+
+    assert [(event["date"], event["title"]) for event in updated_events] == [("2026-08-05", "Ops3")]
+
+
+def test_sync_schedule_keeps_same_shift_name_on_different_dates(tmp_path):
+    new_events = [
+        build_event_from_shift({"id": "Ops2", "from": "04:00", "to": "11:49"}, "2026-08-06"),
+        build_event_from_shift({"id": "Ops2", "from": "04:00", "to": "11:49"}, "2026-08-07"),
+    ]
+
+    updated_events, _changes = sync_schedule([], new_events, "2026-08-01", "2026-08-31", False, tmp_path)
+
+    assert [event["date"] for event in updated_events] == ["2026-08-06", "2026-08-07"]
+    assert len({event["id"] for event in updated_events}) == 2
 
 
 def test_select_next_calendar_events_excludes_past_and_limits_to_seven():

@@ -61,7 +61,7 @@ GOOGLE_TOKEN_PATH = DATA_DIR / "google_token.json"
 GOOGLE_SYNC_STATE_PATH = DATA_DIR / "google_sync_state.json"
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar"]
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.8.3"
+APP_VERSION = "1.8.4"
 
 
 def application_port() -> int:
@@ -870,8 +870,9 @@ def build_event_from_shift(shift: dict[str, Any], shift_date: str) -> dict[str, 
         end_dt = datetime.fromisoformat(end) + timedelta(days=1)
         end = end_dt.strftime("%Y-%m-%dT%H:%M:%S")
 
+    event_id = f"{shift_date}:{title}:{start}:{end}"
     return {
-        "id": title,
+        "id": event_id,
         "title": title,
         "date": shift_date,
         "start": start,
@@ -897,21 +898,27 @@ def sync_schedule(
     target_dir = output_dir or OUTPUT_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    if remove_old_shifts:
-        filtered_existing = [event for event in existing_events if _is_in_window(event.get("date"), window_start, window_end)]
-        updated_events = filtered_existing + new_events
-    else:
-        updated_events = list(existing_events)
-        seen_ids: set[str] = {event.get("id", "") for event in updated_events if event.get("id")}
-        for event in new_events:
-            event_id = event.get("id") or event.get("title") or ""
-            if event_id in seen_ids:
-                continue
-            # Filtrér nye events til kun at være inden for window
-            if not _is_in_window(event.get("date"), window_start, window_end):
-                continue
-            updated_events.append(event)
+    # SelfService is authoritative inside the requested window. Replace that
+    # section completely so changed or removed duties cannot survive as stale
+    # calendar entries. Outside the window, preserve history unless the user
+    # explicitly asks to remove old shifts.
+    preserved_events = (
+        []
+        if remove_old_shifts
+        else [event for event in existing_events if not _is_in_window(event.get("date"), window_start, window_end)]
+    )
+    updated_events = list(preserved_events)
+    seen_ids: set[str] = {str(event.get("id") or "") for event in updated_events}
+    for event in new_events:
+        if not _is_in_window(event.get("date"), window_start, window_end):
+            continue
+        event_id = str(event.get("id") or "")
+        if event_id and event_id in seen_ids:
+            continue
+        updated_events.append(event)
+        if event_id:
             seen_ids.add(event_id)
+    updated_events.sort(key=lambda event: (str(event.get("date", "")), str(event.get("start", ""))))
 
     changes: list[dict[str, Any]] = []
     return updated_events, changes

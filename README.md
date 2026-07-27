@@ -27,6 +27,7 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 - Synkronisere på tværs af månedsskift
 - Åbne arbejdskalenderen automatisk, også når SelfService lander på forsiden efter login
 - Aflæse SelfService-kalenderens faktiske måned og bruge både knap- og dropdown-navigation
+- Erstatte ændrede eller fjernede vagter i den synkroniserede periode uden at blande gamle kalenderposter ind
 - Vise de næste syv forskellige kalenderdage på dashboardet
 - Eksportere vagter til Apple Kalender og andre ICS-kompatible kalendere
 - Dele kalenderen lokalt, på samme Wi-Fi eller via en valgfri offentlig HTTPS-adresse
@@ -109,8 +110,8 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 
 ## Installation
 
-- [Download RosterMate PKG til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.8.3-macOS.pkg)
-- [Download RosterMate Setup.exe til Windows (beta)](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.8.3-Windows-Setup.exe)
+- [Download RosterMate PKG til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.8.4-macOS.pkg)
+- [Download RosterMate Setup.exe til Windows (beta)](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.8.4-Windows-Setup.exe)
 
 Begge platforme har en tydelig afinstallationskommando. Har du brug for hjælp, finder du de separate vejledninger til [macOS](docs/INSTALL_MACOS.md) og [Windows](docs/INSTALL_WINDOWS.md).
 
