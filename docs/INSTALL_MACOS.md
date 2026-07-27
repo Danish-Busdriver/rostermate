@@ -21,6 +21,22 @@ Gemte valg fra dashboard og indstillinger har forrang over standardværdier i `.
 
 macOS-pakken indeholder kun den fælles RosterMate-app og macOS-filer. Windows-installationsscripts og Windows-ikoner medtages ikke.
 
+## Hvis macOS blokerer installationspakken
+
+RosterMate er endnu ikke signeret og notariseret med et Apple Developer ID. macOS kan derfor vise, at udvikleren ikke kan bekræftes, eller at Apple ikke kan kontrollere pakken for skadelig software.
+
+Fortsæt kun, hvis pakken er hentet fra [RosterMates officielle GitHub Releases](https://github.com/Danish-Busdriver/rostermate/releases), og filnavnet svarer til den forventede RosterMate-version.
+
+1. Dobbeltklik først på `.pkg`-filen, så macOS registrerer blokeringen, og luk derefter advarslen.
+2. Åbn **Apple-menuen → Systemindstillinger → Anonymitet & sikkerhed**.
+3. Rul ned til **Sikkerhed**, og klik **Åbn alligevel** ud for RosterMate.
+4. Godkend med Touch ID eller Mac-loginadgangskoden.
+5. Klik **Åbn**, og gennemfør installationen.
+
+Knappen **Åbn alligevel** vises normalt kun i cirka en time efter det blokerede åbningsforsøg. Hvis den mangler, skal pakken forsøges åbnet igen først. På en arbejdscomputer kan en administratorpolitik forhindre manuel godkendelse; kontakt i så fald administratoren.
+
+Deaktivér ikke Gatekeeper globalt, og brug ikke Terminal-kommandoer til at fjerne macOS-sikkerhedskontrollen. Apples aktuelle sikkerhedsvejledning findes under [Åbn en app fra en ukendt udvikler](https://support.apple.com/guide/mac-help/mh40616/mac).
+
 Terminalinstallation er et alternativ:
 
 Åbn Terminal og kør:
@@ -47,7 +63,7 @@ Følg opsætningsguiden i browseren for at oprette en chaufførprofil og forbind
 
 `RosterMate.app` ligger efter installationen i `/Applications/RosterMate`. Appen genstarter kun en proces, der kan identificeres som en ældre RosterMate-version, og åbner først brugerfladen, når den aktuelle version har bestået sit health-check. Andre programmer på den ønskede port stoppes ikke. En installation uden profiler sendes direkte til opsætningsguiden. Mens RosterMate kører, vises logoet i menulinjen med genveje til at åbne eller afslutte appen.
 
-`.pkg`-filen er endnu ikke signeret og notariseret med et Apple Developer ID. macOS kan derfor bede brugeren om at godkende åbningen under **Systemindstillinger → Anonymitet & sikkerhed**. Signering fjerner denne ekstra advarsel og er næste distributionsforbedring.
+Signering med Apple Developer ID vil senere kunne fjerne den ekstra godkendelse.
 
 ## Manuel installation
 

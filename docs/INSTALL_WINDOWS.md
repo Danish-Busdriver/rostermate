@@ -29,6 +29,20 @@ Setup.exe-installationen:
 - opretter datamappen under `%LOCALAPPDATA%\RosterMate`
 - opretter en RosterMate-genvej i Start-menuen
 
+## Hvis Windows SmartScreen blokerer installationsfilen
+
+RosterMates `Setup.exe` er endnu ikke digitalt signeret. Microsoft Defender SmartScreen kan derfor vise **Windows beskyttede din pc**, fordi filen ikke har en kendt udgiver eller opbygget omdømme.
+
+Fortsæt kun, hvis installationsfilen er hentet fra [RosterMates officielle GitHub Releases](https://github.com/Danish-Busdriver/rostermate/releases), og filnavnet svarer til den forventede RosterMate-version.
+
+1. Dobbeltklik på `RosterMate-<version>-Windows-Setup.exe`.
+2. Klik **Flere oplysninger** i SmartScreen-vinduet.
+3. Kontrollér, at appnavnet er den RosterMate-fil, du netop hentede. **Udgiver** vil stå som ukendt, indtil programmet bliver signeret.
+4. Klik **Kør alligevel**.
+5. Godkend den almindelige Windows-brugerkontokontrol med **Ja**, og gennemfør installationen.
+
+Hvis **Kør alligevel** ikke vises, kan computeren være styret af en organisation, som har blokeret ukendte apps. Kontakt administratoren i stedet for at deaktivere SmartScreen eller tilføje en generel Defender-undtagelse. Microsoft beskriver, at en usigneret fil kan udløse denne advarsel, og at fortsættelse kan være helt blokeret af en virksomhedspolitik, i [SmartScreen reputation for Windows app developers](https://learn.microsoft.com/windows/apps/package-and-deploy/smartscreen-reputation).
+
 ### Alternativ installation fra kildekode
 
 Udviklere kan fortsat klone repositoryet og køre `install-windows.cmd` manuelt.
