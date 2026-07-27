@@ -5,7 +5,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app as app_module
-from app import build_event_from_shift, list_driver_ids, navigate_selfservice_month, parse_selfservice_calendar_pages, select_next_calendar_events, software_info, sync_schedule, valid_google_client_id, write_outputs
+from app import build_event_from_shift, list_driver_ids, navigate_selfservice_month, open_selfservice_calendar, parse_selfservice_calendar_pages, select_next_calendar_events, software_info, sync_schedule, valid_google_client_id, write_outputs
 from sync import fetch_status_is_error, run_initial_sync
 
 
@@ -132,6 +132,53 @@ def test_selfservice_month_navigation_uses_dropdown_when_windows_layout_has_no_b
     navigate_selfservice_month(page, 2026, 8)
 
     assert (page.year, page.month) == (2026, 8)
+
+
+def test_selfservice_calendar_opens_assignments_when_login_lands_on_home_page():
+    class Locator:
+        def count(self):
+            return 0
+
+    class Page:
+        def __init__(self):
+            self.calendar_ready = False
+            self.visited = []
+
+        def wait_for_selector(self, selector, **_kwargs):
+            if selector == "#Calendar" and not self.calendar_ready:
+                raise TimeoutError("calendar is not on the home page")
+
+        def locator(self, _selector):
+            return Locator()
+
+        def goto(self, url, **_kwargs):
+            self.visited.append(url)
+            self.calendar_ready = True
+
+    page = Page()
+    open_selfservice_calendar(page, "https://selfservice.example.test")
+
+    assert page.visited == ["https://selfservice.example.test/Assignments"]
+
+
+def test_selfservice_calendar_reports_expired_session_before_navigation():
+    class Locator:
+        def count(self):
+            return 1
+
+    class Page:
+        def wait_for_selector(self, *_args, **_kwargs):
+            raise TimeoutError("calendar is missing")
+
+        def locator(self, _selector):
+            return Locator()
+
+    try:
+        open_selfservice_calendar(Page(), "https://selfservice.example.test")
+    except RuntimeError as exc:
+        assert "sessionen er udløbet" in str(exc)
+    else:
+        raise AssertionError("An expired SelfService session should be reported")
 
 
 def test_write_outputs_creates_rfc5545_calendar(tmp_path):

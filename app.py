@@ -12,6 +12,7 @@ import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
 
 from flask import Flask, abort, jsonify, redirect, render_template_string, request, send_file, session, url_for
@@ -60,7 +61,7 @@ GOOGLE_TOKEN_PATH = DATA_DIR / "google_token.json"
 GOOGLE_SYNC_STATE_PATH = DATA_DIR / "google_sync_state.json"
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar"]
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.8.2"
+APP_VERSION = "1.8.3"
 
 
 def application_port() -> int:
@@ -1074,6 +1075,30 @@ def displayed_selfservice_month(page: Any) -> tuple[int, int]:
     return year, month
 
 
+def open_selfservice_calendar(page: Any, selfservice_url: str) -> None:
+    """Open Assignments when a valid session lands on the SelfService home page."""
+    try:
+        page.wait_for_selector("#Calendar", state="attached", timeout=5000)
+        return
+    except Exception:
+        pass
+
+    login_selector = "input#Username, input#Password"
+    if page.locator(login_selector).count() > 0:
+        raise RuntimeError("SelfService-sessionen er udløbet. Forbind til SelfService igen i opsætningsguiden.")
+
+    assignments_url = urljoin(selfservice_url.rstrip("/") + "/", "Assignments")
+    page.goto(assignments_url, wait_until="domcontentloaded")
+    try:
+        page.wait_for_selector("#Loading", state="hidden", timeout=15000)
+    except Exception:
+        pass
+
+    if page.locator(login_selector).count() > 0:
+        raise RuntimeError("SelfService-sessionen er udløbet. Forbind til SelfService igen i opsætningsguiden.")
+    page.wait_for_selector("#Calendar", state="attached", timeout=30000)
+
+
 def navigate_selfservice_month(page: Any, target_year: int, target_month: int) -> None:
     """Navigate the employee calendar without assuming its initial month or exact layout."""
     target = (target_year, target_month)
@@ -1236,6 +1261,14 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
                             pass
                 except:
                     pass
+
+            try:
+                open_selfservice_calendar(page, settings["url"])
+            except Exception as exc:
+                context.close()
+                if browser is not None:
+                    browser.close()
+                return [], f"SelfService-kalenderen kunne ikke åbnes: {exc}"
 
             today_month = date.today().replace(day=1)
             try:
