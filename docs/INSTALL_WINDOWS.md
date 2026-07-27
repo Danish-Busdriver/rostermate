@@ -1,6 +1,6 @@
 # Installation på Windows
 
-Windows-udgaven bruger samme dashboard, SelfService-synkronisering, profiler, historik og kalenderfunktioner som macOS-udgaven. Installationsflowet er i beta, fordi det endnu ikke er pakket som en signeret `.exe`- eller `.msi`-installer.
+Windows-udgaven bruger samme dashboard, SelfService-synkronisering, profiler, historik og kalenderfunktioner som macOS-udgaven. Den leveres som en direkte `Setup.exe`, der installerer de nødvendige komponenter.
 
 ## Systemkrav
 
@@ -149,11 +149,11 @@ Kør den platformfælles testpakke:
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-## Kendte beta-begrænsninger
+## Kendte begrænsninger
 
 - Setup.exe er endnu ikke digitalt signeret, så SmartScreen kan vise en advarsel.
 - SmartScreen kan advare om de lokale scripts.
-- Windows-scripts og Task Scheduler-kommandoer er dækket af automatiske tests, men skal release-testes på rigtig Windows-hardware før en stabil Windows-udgivelse.
+- Windows-scripts og Task Scheduler-kommandoer er dækket af automatiske platformstests. Installationspakken bør fortsat kontrolleres i et rent Windows-miljø før hver udgivelse.
 
 ## Lokale loginoplysninger
 

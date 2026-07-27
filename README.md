@@ -10,7 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-blue" alt="macOS">
-  <img src="https://img.shields.io/badge/Windows-beta-0078D4" alt="Windows beta">
+  <img src="https://img.shields.io/badge/platform-Windows-0078D4" alt="Windows">
   <img src="https://img.shields.io/badge/version-1.10.0-00A9CE" alt="Version 1.10.0">
   <img src="https://img.shields.io/badge/license-MIT-red" alt="MIT license">
 </p>
@@ -70,7 +70,7 @@ Herefter kan du synkronisere fra dashboardet. RosterMate forsøger først automa
 
 ### Tilgængeligt nu
 
-- [x] macOS-app og Windows-beta med samme GUI
+- [x] macOS- og Windows-app med samme GUI
 - [x] Guidet og automatisk SelfService-login
 - [x] Synkronisering på tværs af måneder
 - [x] Dashboard, historik og ændringsregistrering
@@ -87,7 +87,6 @@ Herefter kan du synkronisere fra dashboardet. RosterMate forsøger først automa
 - [ ] Bedre backup- og gendannelsesflow
 - [ ] Signeret og notariseret macOS-installationspakke
 - [ ] Digitalt signeret Windows-installationspakke
-- [ ] Stabil Windows-udgave efter bredere test
 
 ### På længere sigt
 
@@ -98,7 +97,7 @@ Herefter kan du synkronisere fra dashboardet. RosterMate forsøger først automa
 ## Hent RosterMate
 
 - [RosterMate 1.10.0 til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.10.0-macOS.pkg)
-- [RosterMate 1.10.0 til Windows (beta)](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.10.0-Windows-Setup.exe)
+- [RosterMate 1.10.0 til Windows](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.10.0-Windows-Setup.exe)
 
 Teknisk installation, fejlfinding og afinstallation findes i de separate vejledninger:
 
