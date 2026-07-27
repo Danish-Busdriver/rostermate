@@ -16,6 +16,7 @@ PROJECT_DIR = Path(__file__).resolve().parent
 DATA_ROOT = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "RosterMate"
 LOG_DIR = DATA_ROOT / "logs"
 LAUNCHER_LOG = LOG_DIR / "launcher.log"
+STARTUP_TIMEOUT_SECONDS = 120
 
 
 def log(message: str) -> None:
@@ -42,6 +43,14 @@ def current_version() -> str:
         check=True,
     )
     return result.stdout.strip()
+
+
+def log_tail(path: Path, lines: int = 20) -> str:
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return ""
+    return "\n".join(content[-lines:]).strip()
 
 
 def listener_pid(port: int) -> int:
@@ -92,34 +101,63 @@ def launch() -> int:
         open_wizard(port)
         return 0
 
-    update = subprocess.run([sys.executable, "auto_update.py"], cwd=PROJECT_DIR, check=False)
+    update = subprocess.run(
+        [sys.executable, "auto_update.py"],
+        cwd=PROJECT_DIR,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    update_message = (update.stdout or update.stderr).strip()
+    if update_message:
+        log(update_message)
     log(f"Opdateringskontrol afsluttet med kode {update.returncode}.")
     expected = current_version()
     port = ensure_available_port()
     os.environ["ROSTERMATE_PORT"] = str(port)
 
-    stdout_log = (LOG_DIR / "rostermate.stdout.log").open("a", encoding="utf-8")
-    stderr_log = (LOG_DIR / "rostermate.stderr.log").open("a", encoding="utf-8")
+    stdout_path = LOG_DIR / "rostermate.stdout.log"
+    stderr_path = LOG_DIR / "rostermate.stderr.log"
+    stdout_log = stdout_path.open("a", encoding="utf-8")
+    stderr_log = stderr_path.open("a", encoding="utf-8")
+    server_environment = os.environ.copy()
+    server_environment["PYTHONUNBUFFERED"] = "1"
     server = subprocess.Popen(
-        [sys.executable, "app.py"],
+        [sys.executable, "-u", "app.py"],
         cwd=PROJECT_DIR,
-        env=os.environ.copy(),
+        env=server_environment,
         stdout=stdout_log,
         stderr=stderr_log,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     log(f"Serverproces {server.pid} startet på port {port}.")
 
-    for _ in range(60):
+    attempts = STARTUP_TIMEOUT_SECONDS * 2
+    for attempt in range(attempts):
         if server.poll() is not None:
-            raise RuntimeError(f"Serveren stoppede med kode {server.returncode}. Se rostermate.stderr.log.")
+            details = log_tail(stderr_path)
+            suffix = f"\nSeneste serverfejl:\n{details}" if details else ""
+            raise RuntimeError(f"Serveren stoppede med kode {server.returncode}.{suffix}")
         status = health(port)
         if status and status.get("version") == expected:
             start_tray(server.pid)
             open_wizard(port)
             return 0
+        if status and status.get("version") != expected:
+            log(f"Port {port} svarede med en anden RosterMate-version: {status.get('version')!r}.")
+        if attempt and attempt % 20 == 0:
+            log(f"Venter stadig på serverproces {server.pid} på port {port} ({attempt // 2} sekunder).")
         time.sleep(0.5)
-    raise RuntimeError(f"RosterMate svarede ikke på port {port} inden for 30 sekunder.")
+    server.terminate()
+    try:
+        server.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        server.kill()
+    details = log_tail(stderr_path)
+    suffix = f"\nSeneste serverlog:\n{details}" if details else ""
+    raise RuntimeError(
+        f"RosterMate svarede ikke på port {port} inden for {STARTUP_TIMEOUT_SECONDS} sekunder.{suffix}"
+    )
 
 
 def main() -> int:

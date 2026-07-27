@@ -108,6 +108,10 @@ def test_windows_distribution_files_are_present():
     assert "ensure_available_port" in windows_launcher
     assert "start_tray" in windows_launcher
     assert 'http://localhost:{port}/wizard/' in windows_launcher
+    assert "STARTUP_TIMEOUT_SECONDS = 120" in windows_launcher
+    assert 'capture_output=True' in windows_launcher
+    assert 'server_environment["PYTHONUNBUFFERED"] = "1"' in windows_launcher
+    assert "Seneste serverfejl" in windows_launcher
 
 
 def test_windows_exe_installer_definition_is_present():

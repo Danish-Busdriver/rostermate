@@ -10,7 +10,7 @@ Windows-udgaven bruger samme dashboard, SelfService-synkronisering, profiler, hi
 
 ## Anbefalet installation
 
-1. Download `RosterMate-1.8.1-Windows-Setup.exe` fra den seneste GitHub Release.
+1. Download `RosterMate-1.8.2-Windows-Setup.exe` fra den seneste GitHub Release.
 2. Dobbeltklik på installationsfilen.
 3. Vælg eventuelt en skrivebordsgenvej og gennemfør guiden.
 4. Lad installationsprogrammet hente Python, RosterMates afhængigheder og Chromium.
@@ -57,7 +57,7 @@ Logfiler gemmes under:
 %LOCALAPPDATA%\RosterMate\logs
 ```
 
-`launcher.log` beskriver hvert starttrin. Hvis starten fejler, bliver kommandovinduet stående og viser denne placering. `rostermate.stderr.log` indeholder eventuelle serverfejl.
+`launcher.log` beskriver hvert starttrin. Første start kan være langsommere på en computer, hvor Windows Defender netop har scannet installationen, så launcheren venter i op til 120 sekunder. Hvis starten fejler, bliver kommandovinduet stående og viser både logplaceringen og de seneste linjer fra serverfejlen. `rostermate.stderr.log` indeholder hele serverfejlen.
 
 ## Første opsætning
 
