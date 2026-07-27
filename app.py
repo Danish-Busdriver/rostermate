@@ -60,7 +60,7 @@ GOOGLE_TOKEN_PATH = DATA_DIR / "google_token.json"
 GOOGLE_SYNC_STATE_PATH = DATA_DIR / "google_sync_state.json"
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar"]
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.8.0"
+APP_VERSION = "1.8.1"
 
 
 def application_port() -> int:
@@ -1064,6 +1064,76 @@ def parse_selfservice_calendar_pages(
     return sorted(events, key=lambda event: (str(event.get("date", "")), str(event.get("start", ""))))
 
 
+def displayed_selfservice_month(page: Any) -> tuple[int, int]:
+    page.wait_for_selector("#Calendar", state="attached", timeout=30000)
+    calendar = page.locator("#Calendar")
+    year = int(calendar.get_attribute("data-year") or 0)
+    month = int(calendar.get_attribute("data-month") or 0)
+    if year < 2000 or month not in range(1, 13):
+        raise RuntimeError("SelfService-kalenderens viste måned kunne ikke aflæses")
+    return year, month
+
+
+def navigate_selfservice_month(page: Any, target_year: int, target_month: int) -> None:
+    """Navigate the employee calendar without assuming its initial month or exact layout."""
+    target = (target_year, target_month)
+    for _ in range(18):
+        current = displayed_selfservice_month(page)
+        if current == target:
+            return
+
+        forward = current < target
+        selector = (
+            "#NextMonth, #MonthAndYearSelectorAndNavigators .CalendarNextPeriod"
+            if forward
+            else "#PreviousMonth, #MonthAndYearSelectorAndNavigators .CalendarPreviousPeriod"
+        )
+        clicked = False
+        try:
+            page.locator(selector).first.click(timeout=15000)
+            clicked = True
+        except Exception:
+            clicked = bool(
+                page.evaluate(
+                    """target => {
+                        const input = document.querySelector('#MonthAndYearSelectorKendoDDList');
+                        const widget = input && window.jQuery
+                            ? window.jQuery(input).data('kendoDropDownList')
+                            : null;
+                        if (!widget || !widget.dataSource) return false;
+                        const item = widget.dataSource.data().find(value =>
+                            Number(value.Year) === target.year && Number(value.Month) === target.month
+                        );
+                        if (!item) return false;
+                        widget.value(item.Value);
+                        widget.trigger('change');
+                        return true;
+                    }""",
+                    {"year": target_year, "month": target_month},
+                )
+            )
+        if not clicked:
+            raise RuntimeError("SelfService viste ingen brugbar månedsnavigation")
+
+        page.wait_for_function(
+            """previous => {
+                const calendar = document.querySelector('#Calendar');
+                return calendar && (
+                    Number(calendar.dataset.year) !== previous.year
+                    || Number(calendar.dataset.month) !== previous.month
+                );
+            }""",
+            arg={"year": current[0], "month": current[1]},
+            timeout=30000,
+        )
+        try:
+            page.wait_for_selector("#Loading", state="hidden", timeout=15000)
+        except Exception:
+            pass
+
+    raise RuntimeError(f"SelfService kunne ikke navigere til {target_month:02d}/{target_year}")
+
+
 def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[dict[str, Any]], str]:
     paths = get_driver_paths(driver_id)
     settings = load_settings(driver_id)
@@ -1167,6 +1237,15 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
                 except:
                     pass
 
+            today_month = date.today().replace(day=1)
+            try:
+                navigate_selfservice_month(page, today_month.year, today_month.month)
+            except Exception as exc:
+                context.close()
+                if browser is not None:
+                    browser.close()
+                return [], f"Login virkede, men SelfService-kalenderen kunne ikke åbnes: {exc}"
+
             html = read_stable_page_content(page)
             if html is None:
                 context.close()
@@ -1184,20 +1263,7 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
                 else:
                     current_month = current_month.replace(month=current_month.month + 1)
                 try:
-                    page.click("#NextMonth", timeout=5000)
-                    page.wait_for_function(
-                        """target => {
-                            const calendar = document.querySelector('#Calendar');
-                            return calendar && Number(calendar.dataset.year) === target.year
-                                && Number(calendar.dataset.month) === target.month;
-                        }""",
-                        arg={"year": current_month.year, "month": current_month.month},
-                        timeout=15000,
-                    )
-                    try:
-                        page.wait_for_selector("#Loading", state="hidden", timeout=10000)
-                    except Exception:
-                        pass
+                    navigate_selfservice_month(page, current_month.year, current_month.month)
                     month_html = read_stable_page_content(page)
                     if month_html is not None:
                         html_pages.append(month_html)

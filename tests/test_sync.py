@@ -5,7 +5,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app as app_module
-from app import build_event_from_shift, list_driver_ids, parse_selfservice_calendar_pages, select_next_calendar_events, software_info, sync_schedule, valid_google_client_id, write_outputs
+from app import build_event_from_shift, list_driver_ids, navigate_selfservice_month, parse_selfservice_calendar_pages, select_next_calendar_events, software_info, sync_schedule, valid_google_client_id, write_outputs
 from sync import fetch_status_is_error, run_initial_sync
 
 
@@ -44,6 +44,94 @@ def test_selfservice_parser_combines_months_and_uses_exact_workday_dates():
     assert [event["date"] for event in events] == ["2026-07-31", "2026-08-01", "2026-08-02"]
     assert events[1]["start"] == "2026-08-01T06:00:00"
     assert events[2]["all_day"] is True
+
+
+def test_selfservice_month_navigation_reads_actual_month_and_uses_next_button():
+    class CalendarLocator:
+        def __init__(self, page):
+            self.page = page
+
+        def get_attribute(self, name):
+            return str(self.page.year if name == "data-year" else self.page.month)
+
+    class NavigationLocator:
+        def __init__(self, page, selector):
+            self.page = page
+            self.selector = selector
+            self.first = self
+
+        def click(self, **_kwargs):
+            self.page.clicked.append(self.selector)
+            if "Next" in self.selector:
+                self.page.month += 1
+            else:
+                self.page.month -= 1
+
+    class Page:
+        year = 2026
+        month = 7
+
+        def __init__(self):
+            self.clicked = []
+
+        def wait_for_selector(self, *_args, **_kwargs):
+            pass
+
+        def locator(self, selector):
+            if selector == "#Calendar":
+                return CalendarLocator(self)
+            return NavigationLocator(self, selector)
+
+        def wait_for_function(self, *_args, **_kwargs):
+            pass
+
+        def evaluate(self, *_args, **_kwargs):
+            raise AssertionError("Dropdown fallback should not be needed")
+
+    page = Page()
+    navigate_selfservice_month(page, 2026, 8)
+
+    assert (page.year, page.month) == (2026, 8)
+    assert page.clicked == ["#NextMonth, #MonthAndYearSelectorAndNavigators .CalendarNextPeriod"]
+
+
+def test_selfservice_month_navigation_uses_dropdown_when_windows_layout_has_no_button():
+    class Locator:
+        first = None
+
+        def __init__(self, page, calendar=False):
+            self.page = page
+            self.calendar = calendar
+            self.first = self
+
+        def get_attribute(self, name):
+            return str(self.page.year if name == "data-year" else self.page.month)
+
+        def click(self, **_kwargs):
+            raise TimeoutError("#NextMonth is not available")
+
+    class Page:
+        year = 2026
+        month = 7
+
+        def wait_for_selector(self, *_args, **_kwargs):
+            pass
+
+        def locator(self, selector):
+            return Locator(self, calendar=selector == "#Calendar")
+
+        def evaluate(self, _script, target):
+            self.year = target["year"]
+            self.month = target["month"]
+            return True
+
+        def wait_for_function(self, *_args, **_kwargs):
+            pass
+
+    page = Page()
+    navigate_selfservice_month(page, 2026, 8)
+
+    assert (page.year, page.month) == (2026, 8)
 
 
 def test_write_outputs_creates_rfc5545_calendar(tmp_path):
