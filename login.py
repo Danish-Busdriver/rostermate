@@ -7,6 +7,7 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import urljoin
 
 from session import SelfServiceSessionStore
 
@@ -38,11 +39,8 @@ def read_stable_page_content(page: Any, attempts: int = 8) -> str | None:
 def detect_selfservice_login_state(page: Any) -> str:
     """Detect login state without reading or serializing the complete page."""
     try:
-        current_url = str(page.url)
         if page.locator(LOGIN_FIELD_SELECTOR).count() > 0:
             return "login"
-        if "assignments" in current_url.casefold():
-            return "authenticated"
         if page.locator(AUTHENTICATED_MARKER_SELECTOR).count() > 0:
             return "authenticated"
         return "unknown"
@@ -215,8 +213,31 @@ class SelfServiceLoginManager:
                 self.update(flow_id, state="awaiting_login", message="Venter på at du logger ind i SelfService…")
 
                 deadline = time.time() + 900
+                authenticated_streak = 0
+                unknown_streak = 0
+                assignments_opened = False
                 while time.time() < deadline:
-                    if detect_selfservice_login_state(page) == "authenticated":
+                    login_state = detect_selfservice_login_state(page)
+                    if login_state == "authenticated":
+                        authenticated_streak += 1
+                        unknown_streak = 0
+                    else:
+                        authenticated_streak = 0
+                        unknown_streak = unknown_streak + 1 if login_state == "unknown" else 0
+                    if unknown_streak >= 20 and not assignments_opened:
+                        assignments_opened = True
+                        page.goto(
+                            urljoin(login_url.rstrip("/") + "/", "Assignments"),
+                            wait_until="domcontentloaded",
+                        )
+                    # Require a stable rendered calendar for 1.5 seconds. The
+                    # Assignments URL can appear before Tide has persisted the
+                    # authenticated browser session.
+                    if authenticated_streak >= 3:
+                        try:
+                            page.wait_for_selector("#Loading", state="hidden", timeout=15000)
+                        except Exception:
+                            pass
                         save_session_storage(page, session_store)
                         context.storage_state(path=str(session_store.storage_state_path), indexed_db=True)
                         context.close()

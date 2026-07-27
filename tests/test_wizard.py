@@ -97,7 +97,7 @@ class LoginMarkerPage:
 
 def test_login_detection_uses_only_url_and_small_dom_markers():
     assert detect_selfservice_login_state(LoginMarkerPage("https://example/Account/Login", login_fields=2)) == "login"
-    assert detect_selfservice_login_state(LoginMarkerPage("https://example/Assignments")) == "authenticated"
+    assert detect_selfservice_login_state(LoginMarkerPage("https://example/Assignments")) == "unknown"
     assert detect_selfservice_login_state(LoginMarkerPage("https://example/home", authenticated_markers=1)) == "authenticated"
     assert detect_selfservice_login_state(LoginMarkerPage("https://example/loading")) == "unknown"
 
