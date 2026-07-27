@@ -13,6 +13,7 @@ def test_macos_password_uses_keychain_command(monkeypatch):
         return SimpleNamespace(returncode=0, stdout="")
 
     monkeypatch.setattr(credentials.sys, "platform", "darwin")
+    monkeypatch.setattr(credentials.os, "name", "posix")
     monkeypatch.setattr(credentials.subprocess, "run", fake_run)
 
     credentials.set_password("12345", "secret")
