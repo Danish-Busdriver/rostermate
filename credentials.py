@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from typing import Any
@@ -15,7 +16,7 @@ def _keyring() -> Any:
 
 
 def get_password(driver_id: str) -> str:
-    if sys.platform == "darwin":
+    if os.name == "posix" and sys.platform == "darwin":
         result = subprocess.run(
             ["security", "find-generic-password", "-s", SERVICE_NAME, "-a", driver_id, "-w"],
             capture_output=True,
@@ -32,7 +33,7 @@ def get_password(driver_id: str) -> str:
 def set_password(driver_id: str, password: str) -> None:
     if not password:
         return
-    if sys.platform == "darwin":
+    if os.name == "posix" and sys.platform == "darwin":
         subprocess.run(
             ["security", "add-generic-password", "-U", "-s", SERVICE_NAME, "-a", driver_id, "-w", password],
             capture_output=True,
@@ -44,7 +45,7 @@ def set_password(driver_id: str, password: str) -> None:
 
 
 def delete_password(driver_id: str) -> None:
-    if sys.platform == "darwin":
+    if os.name == "posix" and sys.platform == "darwin":
         subprocess.run(
             ["security", "delete-generic-password", "-s", SERVICE_NAME, "-a", driver_id],
             capture_output=True,
