@@ -182,6 +182,16 @@ def test_wizard_test_connection_route_returns_error_without_session(tmp_path, mo
     assert response.get_json()["status"] == "error"
 
 
+def test_first_run_wizard_contains_background_login_and_secure_fallback():
+    from wizard import FIRST_RUN_TEMPLATE
+
+    assert 'id="selfservice-user"' in FIRST_RUN_TEMPLATE
+    assert 'id="selfservice-password"' in FIRST_RUN_TEMPLATE
+    assert "Log ind og test forbindelse" in FIRST_RUN_TEMPLATE
+    assert "Åbn loginvindue i stedet" in FIRST_RUN_TEMPLATE
+    assert "Credential Manager" in FIRST_RUN_TEMPLATE
+
+
 def test_home_redirects_to_the_only_configured_profile(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")

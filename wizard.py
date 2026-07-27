@@ -95,6 +95,21 @@ FIRST_RUN_TEMPLATE = r'''
             color: var(--text);
             font-weight: 600;
         }
+        .credentials {
+            display: grid;
+            gap: 0.8rem;
+            margin-top: 1.25rem;
+        }
+        .credentials label { color: var(--muted); font-weight: 650; font-size: 0.92rem; }
+        .credentials input {
+            width: 100%;
+            margin-top: 0.35rem;
+            padding: 0.9rem 1rem;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,0.9);
+            font: inherit;
+        }
         .primary-button, .secondary-button {
             border: none;
             border-radius: 18px;
@@ -224,9 +239,18 @@ FIRST_RUN_TEMPLATE = r'''
             <div id="welcome-view" class="{{ 'hidden' if welcome_back else '' }}">
                 <h1>Velkommen til RosterMate</h1>
                 <p class="subtitle">Automatisk synkronisering af din vagtplan fra Tide SelfService.</p>
-                <div class="info">🔒 Dine oplysninger bliver kun gemt lokalt på denne computer.</div>
+                <div class="info">🔒 Adgangskoden gemmes i macOS-nøgleringen eller Windows Credential Manager.</div>
+                <div class="credentials">
+                    <label>Brugernavn
+                        <input id="selfservice-user" autocomplete="username" value="{{ selfservice_user }}" required>
+                    </label>
+                    <label>Adgangskode
+                        <input id="selfservice-password" type="password" autocomplete="current-password" placeholder="{{ 'Gemt sikkert – lad feltet være tomt for at genbruge' if has_saved_password else 'Din SelfService-adgangskode' }}">
+                    </label>
+                </div>
                 <div class="actions">
-                    <button class="primary-button" id="connect-button" type="button">Forbind til SelfService</button>
+                    <button class="primary-button" id="connect-button" type="button">Log ind og test forbindelse</button>
+                    <button class="secondary-button" id="interactive-button" type="button">Åbn loginvindue i stedet</button>
                 </div>
             </div>
 
@@ -276,6 +300,7 @@ FIRST_RUN_TEMPLATE = r'''
         const reloginButton = document.getElementById('relogin-button');
         const reloginAfterSyncButton = document.getElementById('relogin-after-sync');
         const testConnectionButton = document.getElementById('test-connection-button');
+        const interactiveButton = document.getElementById('interactive-button');
         const progressBox = document.getElementById('progress-box');
         const statusPill = document.getElementById('status-pill');
         const connectedCheck = document.getElementById('connected-check');
@@ -290,8 +315,8 @@ FIRST_RUN_TEMPLATE = r'''
         const errorMessage = document.getElementById('error-message');
         let activeFlowId = null;
 
-        async function postJson(url) {
-            const response = await fetch(url, { method: 'POST' });
+        async function postJson(url, body = undefined) {
+            const response = await fetch(url, { method: 'POST', body });
             return response.json();
         }
 
@@ -329,7 +354,7 @@ FIRST_RUN_TEMPLATE = r'''
             previewGrid.classList.add('visible');
         }
 
-        async function startLogin(resetSession = false) {
+        async function startLogin(resetSession = false, interactive = false) {
             clearError();
             completionActions.classList.add('hidden');
             previewGrid.classList.remove('visible');
@@ -338,11 +363,19 @@ FIRST_RUN_TEMPLATE = r'''
             statusPill.className = 'status-pill idle';
             showProgress();
             connectedCheck.textContent = '○';
-            connectedText.textContent = 'Åbner SelfService…';
+            connectedText.textContent = interactive ? 'Åbner SelfService…' : 'Logger ind sikkert i baggrunden…';
             fetchText.textContent = 'Henter dine vagter…';
             syncText.textContent = '⟳ Synkroniserer…';
-            const query = resetSession ? '?reset=1' : '';
-            const result = await postJson('{{ urls.wizard_connect_url }}' + query);
+            const parameters = new URLSearchParams();
+            if (resetSession) parameters.set('reset', '1');
+            if (interactive) parameters.set('interactive', '1');
+            const form = new FormData();
+            const user = document.getElementById('selfservice-user')?.value || '';
+            const password = document.getElementById('selfservice-password')?.value || '';
+            if (user) form.set('user', user);
+            if (password) form.set('password', password);
+            const query = parameters.toString() ? `?${parameters}` : '';
+            const result = await postJson('{{ urls.wizard_connect_url }}' + query, form);
             if (result.status !== 'ok') {
                 statusPill.textContent = result.message || 'Fejl';
                 statusPill.className = 'status-pill error';
@@ -423,9 +456,10 @@ FIRST_RUN_TEMPLATE = r'''
         }
 
         connectButton?.addEventListener('click', () => startLogin(false));
+        interactiveButton?.addEventListener('click', () => startLogin(true, true));
         testConnectionButton?.addEventListener('click', () => testConnection());
-        reloginButton?.addEventListener('click', () => startLogin(true));
-        reloginAfterSyncButton?.addEventListener('click', () => startLogin(true));
+        reloginButton?.addEventListener('click', () => startLogin(true, true));
+        reloginAfterSyncButton?.addEventListener('click', () => startLogin(true, true));
     </script>
 </body>
 </html>

@@ -136,6 +136,18 @@ class SelfServiceLoginManager:
         thread.start()
         return state
 
+    def start_background(self, driver_id: str) -> LoginFlowState:
+        flow_id = uuid.uuid4().hex
+        state = LoginFlowState(
+            flow_id=flow_id,
+            driver_id=driver_id,
+            state="connected",
+            message="Loginoplysninger gemt sikkert. Logger ind i baggrunden…",
+        )
+        with self._lock:
+            self._flows[flow_id] = state
+        return state
+
     def get(self, flow_id: str) -> LoginFlowState | None:
         with self._lock:
             return self._flows.get(flow_id)

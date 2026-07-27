@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+import shutil
 from typing import Any, Callable
 
 
@@ -86,6 +87,10 @@ def run_initial_sync(
         bool(settings.get("remove_old_shifts", False)),
         paths["output_dir"],
     )
+    events_store_path = paths["events_store_path"]
+    if events_store_path.exists() and events_store_path.stat().st_size:
+        paths["backup_dir"].mkdir(parents=True, exist_ok=True)
+        shutil.copy2(events_store_path, paths["backup_dir"] / "events-before-first-sync.json")
     write_outputs(updated_events, changes, paths["output_dir"])
 
     history = load_history(paths["history_path"])

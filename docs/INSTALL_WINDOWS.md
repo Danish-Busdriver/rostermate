@@ -10,7 +10,7 @@ Windows-udgaven bruger samme dashboard, SelfService-synkronisering, profiler, hi
 
 ## Anbefalet installation
 
-1. Download `RosterMate-1.8.5-Windows-Setup.exe` fra den seneste GitHub Release.
+1. Download `RosterMate-1.9.0-Windows-Setup.exe` fra den seneste GitHub Release.
 2. Dobbeltklik på installationsfilen.
 3. Vælg eventuelt en skrivebordsgenvej og gennemfør guiden.
 4. Lad installationsprogrammet hente Python, RosterMates afhængigheder og Chromium.
@@ -50,6 +50,8 @@ http://localhost:<valgt-port>/wizard/
 Mens appen kører, vises RosterMate-logoet i Windows-systembakken. Højreklik på ikonet for at åbne dashboardet eller afslutte RosterMate. Start-menu- og skrivebordsgenveje bruger det samme logo.
 
 RosterMate bruger port 8080, hvis den er ledig. Hvis et andet program allerede bruger den, vælges automatisk den første ledige port frem til 8179. Porten kan senere ændres under **Indstillinger → Lokal server** og træder i kraft efter genstart.
+
+SelfService-adgangskoden gemmes i Windows Credential Manager via systemets sikre credential-API og skrives ikke i RosterMates indstillingsfiler. Wizarden logger normalt ind skjult. Det separate loginvindue bruges kun som reserve, hvis SelfService kræver ekstra godkendelse.
 
 Logfiler gemmes under:
 

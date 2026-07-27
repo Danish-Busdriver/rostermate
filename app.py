@@ -9,6 +9,8 @@ import shutil
 import hashlib
 import subprocess
 import sys
+import threading
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -18,6 +20,7 @@ from zoneinfo import ZoneInfo
 from flask import Flask, abort, jsonify, redirect, render_template_string, request, send_file, session, url_for
 
 from dashboard import should_show_first_run, should_show_welcome_back
+from credentials import get_password, set_password
 from launch_agent import sync_launch_agent_preference
 from login import launch_authenticated_context, login_manager, read_stable_page_content, save_session_storage
 from port_config import configured_port, port_is_available, save_port, valid_port
@@ -61,7 +64,26 @@ GOOGLE_TOKEN_PATH = DATA_DIR / "google_token.json"
 GOOGLE_SYNC_STATE_PATH = DATA_DIR / "google_sync_state.json"
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar"]
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.8.5"
+APP_VERSION = "1.9.0"
+SYNC_LOCKS: dict[str, threading.Lock] = {}
+SYNC_LOCKS_GUARD = threading.Lock()
+
+
+def driver_sync_lock(driver_id: str) -> threading.Lock:
+    with SYNC_LOCKS_GUARD:
+        return SYNC_LOCKS.setdefault(driver_id, threading.Lock())
+
+
+def fetch_schedule_with_retry(days_ahead: int, driver_id: str, attempts: int = 2) -> tuple[list[dict[str, Any]], str]:
+    last_result: tuple[list[dict[str, Any]], str] = ([], "SelfService kunne ikke kontaktes")
+    for attempt in range(max(1, attempts)):
+        last_result = fetch_selfservice_schedule(days_ahead, driver_id)
+        events, message = last_result
+        if events or not fetch_status_is_error(message):
+            return last_result
+        if attempt + 1 < attempts:
+            time.sleep(1)
+    return last_result
 
 
 def application_port() -> int:
@@ -247,6 +269,15 @@ def load_settings(driver_id: str) -> dict[str, Any]:
             env_values[key.strip()] = value.strip().strip('"').strip("'")
 
     stored = load_json(paths["settings_path"], {})
+    legacy_password = str(stored.get("pass", "") or "")
+    if legacy_password:
+        try:
+            set_password(driver_id, legacy_password)
+        except Exception:
+            pass
+        else:
+            stored = {key: value for key, value in stored.items() if key != "pass"}
+            save_json(paths["settings_path"], stored)
     try:
         days_ahead = int(env_values.get("DAYS_AHEAD", stored.get("days_ahead", 7)))
     except (TypeError, ValueError):
@@ -265,7 +296,7 @@ def load_settings(driver_id: str) -> dict[str, Any]:
         **stored,
         "url": env_values.get("SELFSERVICE_URL", stored.get("url", "https://selfservicedanmark.tidebus.dk")),
         "user": env_values.get("SELFSERVICE_USER", stored.get("user", "")),
-        "pass": env_values.get("SELFSERVICE_PASS", stored.get("pass", "")),
+        "pass": env_values.get("SELFSERVICE_PASS", get_password(driver_id) or stored.get("pass", "")),
         "days_ahead": max(1, min(days_ahead, 365)),
         "run_every_minutes": max(1, min(run_every_minutes, 10080)),
         "remove_old_shifts": _coerce_bool(env_values.get("REMOVE_OLD_SHIFTS", stored.get("remove_old_shifts", False))),
@@ -285,7 +316,9 @@ def load_settings(driver_id: str) -> dict[str, Any]:
 
 def save_driver_settings(driver_id: str, settings: dict[str, Any]) -> None:
     paths = get_driver_paths(driver_id)
-    save_json(paths["settings_path"], settings)
+    sanitized = dict(settings)
+    sanitized.pop("pass", None)
+    save_json(paths["settings_path"], sanitized)
 
 
 def driver_urls(driver_id: str) -> dict[str, str]:
@@ -1494,6 +1527,8 @@ def wizard_page(driver_id: str) -> str:
         welcome_back=welcome_back,
         version=APP_VERSION,
         last_sync=format_timestamp(history[-1].get("timestamp") if history else None),
+        selfservice_user=settings.get("user", ""),
+        has_saved_password=bool(settings.get("pass")),
     )
 
 
@@ -1505,6 +1540,28 @@ def wizard_connect(driver_id: str) -> tuple[Any, int]:
     session_store = SelfServiceSessionStore.from_paths(safe_driver_id, paths)
     if request.args.get("reset") == "1":
         login_manager.clear_driver_session(session_store)
+
+    supplied_user = str(request.form.get("user", "")).strip()
+    supplied_password = str(request.form.get("password", ""))
+    if supplied_user:
+        settings = {**settings, "user": supplied_user}
+    if supplied_password:
+        try:
+            set_password(safe_driver_id, supplied_password)
+        except Exception as exc:
+            return jsonify({
+                "status": "error",
+                "message": f"Adgangskoden kunne ikke gemmes i operativsystemets sikre nøglelager: {exc}",
+            }), 500
+        settings = {**settings, "pass": supplied_password}
+    if supplied_user or supplied_password:
+        save_driver_settings(safe_driver_id, settings)
+        settings = load_settings(safe_driver_id)
+
+    if request.args.get("interactive") != "1" and settings.get("user") and settings.get("pass"):
+        login_manager.clear_driver_session(session_store)
+        flow = login_manager.start_background(safe_driver_id)
+        return jsonify({"status": "ok", "flow_id": flow.flow_id, "message": flow.message}), 200
 
     flow = login_manager.start(safe_driver_id, settings["url"], session_store)
     return jsonify({"status": "ok", "flow_id": flow.flow_id, "message": flow.message}), 200
@@ -1520,6 +1577,9 @@ def wizard_status(driver_id: str) -> tuple[Any, int]:
         return jsonify({"status": "error", "state": "error", "message": "Ukendt wizard-flow"}), 404
 
     if flow.state == "connected" and not flow.payload.get("sync_complete"):
+        sync_lock = driver_sync_lock(safe_driver_id)
+        if not sync_lock.acquire(blocking=False):
+            return jsonify({"status": "ok", "state": "syncing", "message": "En synkronisering kører allerede."}), 200
         login_manager.update(flow_id, state="syncing", message="⟳ Synkroniserer…")
         try:
             settings = load_settings(safe_driver_id)
@@ -1527,7 +1587,7 @@ def wizard_status(driver_id: str) -> tuple[Any, int]:
                 safe_driver_id,
                 settings,
                 paths,
-                fetch_selfservice_schedule,
+                fetch_schedule_with_retry,
                 sync_schedule,
                 write_outputs,
                 load_json,
@@ -1548,6 +1608,8 @@ def wizard_status(driver_id: str) -> tuple[Any, int]:
                     "events": len(result["events"]),
                 },
             )
+        finally:
+            sync_lock.release()
 
     current = login_manager.get(flow_id)
     if current is None:
@@ -2520,23 +2582,31 @@ def sync_route(driver_id: str) -> tuple[Any, int]:
     days_ahead = int(request.form.get("days_ahead", settings.get("days_ahead", 7)))
     remove_old_shifts = request.form.get("remove_old_shifts") == "true"
 
-    existing_events = load_json(paths["events_store_path"], [])
-    new_events, status_message = fetch_selfservice_schedule(days_ahead, safe_driver_id)
+    sync_lock = driver_sync_lock(safe_driver_id)
+    if not sync_lock.acquire(blocking=False):
+        return jsonify({"status": "error", "message": "En synkronisering kører allerede. Prøv igen om et øjeblik."}), 409
+    try:
+        existing_events = load_json(paths["events_store_path"], [])
+        new_events, status_message = fetch_schedule_with_retry(days_ahead, safe_driver_id)
 
-    if not new_events and (not existing_events or fetch_status_is_error(status_message)):
-        return jsonify({"status": "error", "message": status_message}), 400
+        if not new_events and (not existing_events or fetch_status_is_error(status_message)):
+            return jsonify({"status": "error", "message": status_message}), 400
 
-    window_start = date.today().strftime("%Y-%m-%d")
-    window_end = (date.today() + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
-    updated_events, changes = sync_schedule(existing_events, new_events, window_start, window_end, remove_old_shifts, paths["output_dir"])
-    write_outputs(updated_events, changes, paths["output_dir"])
+        window_start = date.today().strftime("%Y-%m-%d")
+        window_end = (date.today() + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+        updated_events, changes = sync_schedule(existing_events, new_events, window_start, window_end, remove_old_shifts, paths["output_dir"])
+        if paths["events_store_path"].exists() and paths["events_store_path"].stat().st_size:
+            create_backup(paths["events_store_path"], paths["backup_dir"])
+        write_outputs(updated_events, changes, paths["output_dir"])
 
-    history = load_history(paths["history_path"])
-    history.append({"timestamp": datetime.now().isoformat(), "summary": f"Synkroniserede {len(new_events)} vagter", "changes": changes})
-    save_history(history, paths["history_path"])
-    save_driver_settings(safe_driver_id, {**settings, "days_ahead": days_ahead, "remove_old_shifts": remove_old_shifts})
+        history = load_history(paths["history_path"])
+        history.append({"timestamp": datetime.now().isoformat(), "summary": f"Synkroniserede {len(new_events)} vagter", "changes": changes})
+        save_history(history, paths["history_path"])
+        save_driver_settings(safe_driver_id, {**settings, "days_ahead": days_ahead, "remove_old_shifts": remove_old_shifts})
 
-    return jsonify({"status": "ok", "message": status_message, "events": updated_events, "changes": changes})
+        return jsonify({"status": "ok", "message": status_message, "events": updated_events, "changes": changes})
+    finally:
+        sync_lock.release()
 
 
 @app.route("/<driver_id>/settings-page")
@@ -2929,7 +2999,7 @@ def settings_page(driver_id: str) -> str:
                         <div class="section-grid">
                             <div class="section{% if needs_selfservice_setup %} setup-highlight span-2{% endif %}">
                                 <h2>SelfService</h2>
-                                <div class="small">RosterMate bruger den rigtige SelfService-side i et separat vindue og gemmer kun browser-sessionen lokalt.</div>
+                                <div class="small">RosterMate logger normalt ind skjult. Adgangskoden ligger i operativsystemets sikre nøglelager, og et synligt vindue bruges kun som reserve.</div>
                                 <div class="connection-card">
                                     <span class="connection-status {{ 'connected' if has_selfservice_session else 'disconnected' }}">{{ '✓ Forbundet til SelfService' if has_selfservice_session else 'Ikke forbundet endnu' }}</span>
                                     <div class="field">
@@ -2938,11 +3008,11 @@ def settings_page(driver_id: str) -> str:
                                         <div class="field-hint">Normalt behøver du ikke ændre denne adresse.</div>
                                     </div>
                                     <div class="inline-actions">
-                                        <a class="ghost-button" href="{{ urls.wizard_url }}">Åbn First Run Wizard</a>
-                                        <a class="ghost-button" href="{{ urls.wizard_url }}">Forbind igen</a>
+                                        <a class="ghost-button" href="{{ urls.wizard_url }}">Åbn opsætningsguide</a>
+                                        <a class="ghost-button" href="{{ urls.wizard_url }}">Skift SelfService-konto</a>
                                     </div>
                                     {% if needs_selfservice_setup %}
-                                    <div class="field-hint">Loginfelter vises ikke her. Brug wizard-flowet til at logge ind sikkert via den officielle SelfService-side.</div>
+                                    <div class="field-hint">Indtast login i opsætningsguiden. Adgangskoden gemmes aldrig i settings.json.</div>
                                     {% endif %}
                                 </div>
                             </div>
@@ -3086,6 +3156,15 @@ def settings_route(driver_id: str) -> tuple[Any, int]:
             "calendar_public_base_url", settings.get("calendar_public_base_url", "")
         ).strip().rstrip("/"),
     }
+    submitted_password = str(request.form.get("pass", ""))
+    if submitted_password:
+        try:
+            set_password(safe_driver_id, submitted_password)
+        except Exception as exc:
+            return jsonify({
+                "status": "error",
+                "message": f"Adgangskoden kunne ikke gemmes i operativsystemets sikre nøglelager: {exc}",
+            }), 500
     save_driver_settings(safe_driver_id, updated_settings)
     save_port(requested_port, root=DATA_DIR.parent)
     port_changed = requested_port != current_port

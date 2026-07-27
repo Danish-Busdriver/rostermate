@@ -528,6 +528,9 @@ def test_settings_route_persists_selfservice_credentials(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
     monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
+    passwords = {}
+    monkeypatch.setattr(app_module, "set_password", lambda driver_id, password: passwords.__setitem__(driver_id, password))
+    monkeypatch.setattr(app_module, "get_password", lambda driver_id: passwords.get(driver_id, ""))
 
     app_module.app.config["TESTING"] = True
 
@@ -564,6 +567,7 @@ def test_settings_route_persists_selfservice_credentials(tmp_path, monkeypatch):
     assert second_settings["url"] == "https://selfservice.other"
     assert second_settings["user"] == "other"
     assert second_settings["pass"] == "secret-2"
+    assert "pass" not in app_module.load_json(tmp_path / "data" / "1234" / "settings.json", {})
 
 
 def test_new_driver_redirects_to_wizard(tmp_path, monkeypatch):

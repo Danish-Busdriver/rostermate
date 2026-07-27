@@ -40,6 +40,9 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 - Opbevare SelfService-session og kalenderdata lokalt
 - Kontrollere SelfService-login via få loginmarkører uden at læse hele siden i loginvinduet
 - Gemme login-sessionen først, når SelfServices kalender er færdigindlæst og stabil
+- Logge ind skjult fra wizarden med adgangskoden sikkert gemt i operativsystemets nøglelager
+- Bruge et synligt SelfService-vindue som reserve ved ekstra godkendelse eller ændret loginflow
+- Forhindre dobbelte synkroniseringer, genforsøge midlertidige fejl og tage backup før kalenderen erstattes
 - Køre den samme GUI og synkroniseringsmotor på macOS og Windows
 - Klargøre en ny Mac-installation automatisk og åbne opsætningsguiden ved første start
 - Hente Python, app-afhængigheder og SelfService-browseren automatisk under installationen
@@ -111,8 +114,8 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 
 ## Installation
 
-- [Download RosterMate PKG til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.8.5-macOS.pkg)
-- [Download RosterMate Setup.exe til Windows (beta)](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.8.5-Windows-Setup.exe)
+- [Download RosterMate PKG til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.9.0-macOS.pkg)
+- [Download RosterMate Setup.exe til Windows (beta)](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.9.0-Windows-Setup.exe)
 
 Begge platforme har en tydelig afinstallationskommando. Har du brug for hjælp, finder du de separate vejledninger til [macOS](docs/INSTALL_MACOS.md) og [Windows](docs/INSTALL_WINDOWS.md).
 
