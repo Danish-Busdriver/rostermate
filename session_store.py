@@ -26,10 +26,14 @@ class SelfServiceSessionStore:
     def session_storage_state_path(self) -> Path:
         return self.storage_state_path.with_name("selfservice_session_storage.json")
 
+    def clear_browser_profile(self) -> None:
+        """Remove Chromium's profile without deleting the exported login state."""
+        if self.user_data_dir.exists():
+            shutil.rmtree(self.user_data_dir, ignore_errors=True)
+
     def clear(self) -> None:
         if self.storage_state_path.exists():
             self.storage_state_path.unlink()
         if self.session_storage_state_path.exists():
             self.session_storage_state_path.unlink()
-        if self.user_data_dir.exists():
-            shutil.rmtree(self.user_data_dir, ignore_errors=True)
+        self.clear_browser_profile()

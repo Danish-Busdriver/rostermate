@@ -7,13 +7,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import app as app_module
 import launch_agent as launch_agent_module
 from login import (
+    AUTHENTICATED_MARKER_SELECTOR,
+    LOGIN_FIELD_SELECTOR,
     detect_selfservice_login_state,
     launch_authenticated_context,
+    prefill_selfservice_credentials,
     read_stable_page_content,
+    restore_saved_cookies,
     restore_session_storage,
     save_session_storage,
 )
-from session import SelfServiceSessionStore
+from session_store import SelfServiceSessionStore
 
 
 def test_health_reports_current_app_version():
@@ -102,6 +106,35 @@ def test_login_detection_uses_only_url_and_small_dom_markers():
     assert detect_selfservice_login_state(LoginMarkerPage("https://example/loading")) == "unknown"
 
 
+def test_login_detection_ignores_hidden_legacy_dom_elements():
+    assert "Username:visible" in LOGIN_FIELD_SELECTOR
+    assert "Password:visible" in LOGIN_FIELD_SELECTOR
+    assert "#Calendar:visible" in AUTHENTICATED_MARKER_SELECTOR
+
+
+def test_prefill_credentials_fills_visible_fields_without_submitting():
+    filled: list[str] = []
+
+    class Locator:
+        @property
+        def first(self):
+            return self
+
+        def count(self):
+            return 1
+
+        def fill(self, value):
+            filled.append(value)
+
+    class Page:
+        def locator(self, _selector):
+            return Locator()
+
+    prefill_selfservice_credentials(Page(), "driver", "secret")
+
+    assert filled == ["driver", "secret"]
+
+
 def test_launch_authenticated_context_reuses_persistent_driver_profile(tmp_path):
     calls: list[tuple[str, object]] = []
 
@@ -133,6 +166,70 @@ def test_launch_authenticated_context_reuses_persistent_driver_profile(tmp_path)
     assert calls == [("persistent", {"user_data_dir": str(store.user_data_dir), "headless": True})]
 
 
+def test_launch_authenticated_context_prefers_persistent_profile_over_exported_state(tmp_path):
+    calls: list[tuple[str, object]] = []
+
+    class Context:
+        def add_init_script(self, **kwargs):
+            calls.append(("init-script", kwargs))
+
+    context = Context()
+
+    class Chromium:
+        def launch(self, **kwargs):
+            raise AssertionError("A separate browser must not be launched")
+
+        def launch_persistent_context(self, **kwargs):
+            calls.append(("persistent", kwargs))
+            return context
+
+    class Playwright:
+        chromium = Chromium()
+
+    store = SelfServiceSessionStore("12345", tmp_path / "state.json", tmp_path / "profile")
+    store.storage_state_path.write_text('{"cookies":[]}', encoding="utf-8")
+    store.user_data_dir.mkdir()
+
+    browser, restored_context = launch_authenticated_context(Playwright(), store, headless=True)
+
+    assert browser is None
+    assert restored_context is context
+    assert calls == [
+        ("persistent", {"user_data_dir": str(store.user_data_dir), "headless": True}),
+    ]
+
+
+def test_hidden_headful_context_is_positioned_offscreen(tmp_path):
+    calls = []
+
+    class Context:
+        pass
+
+    class Chromium:
+        def launch_persistent_context(self, **kwargs):
+            calls.append(kwargs)
+            return Context()
+
+    class Playwright:
+        chromium = Chromium()
+
+    store = SelfServiceSessionStore("12345", tmp_path / "state.json", tmp_path / "profile")
+    store.user_data_dir.mkdir()
+
+    launch_authenticated_context(
+        Playwright(),
+        store,
+        headless=False,
+        hide_window=True,
+    )
+
+    assert calls == [{
+        "user_data_dir": str(store.user_data_dir),
+        "headless": False,
+        "args": ["--window-position=-32000,-32000", "--start-minimized"],
+    }]
+
+
 def test_session_storage_is_saved_and_restored(tmp_path):
     store = SelfServiceSessionStore("12345", tmp_path / "state.json", tmp_path / "profile")
 
@@ -156,15 +253,46 @@ def test_session_storage_is_saved_and_restored(tmp_path):
     assert "https://selfservice.example" in scripts[0]
 
 
+def test_saved_session_cookies_are_restored_into_persistent_context(tmp_path):
+    store = SelfServiceSessionStore("12345", tmp_path / "state.json", tmp_path / "profile")
+    cookies = [{"name": "session", "value": "token", "domain": "selfservice.example", "path": "/"}]
+    store.storage_state_path.write_text(json.dumps({"cookies": cookies}), encoding="utf-8")
+    restored: list[list[dict[str, str]]] = []
+
+    class Context:
+        def add_cookies(self, items):
+            restored.append(items)
+
+    restore_saved_cookies(Context(), store)
+
+    assert restored == [cookies]
+
+
 def test_clear_removes_session_storage_state(tmp_path):
     store = SelfServiceSessionStore("12345", tmp_path / "state.json", tmp_path / "profile")
     store.storage_state_path.write_text("{}", encoding="utf-8")
     store.session_storage_state_path.write_text("{}", encoding="utf-8")
+    store.user_data_dir.mkdir()
 
     store.clear()
 
     assert not store.storage_state_path.exists()
     assert not store.session_storage_state_path.exists()
+    assert not store.user_data_dir.exists()
+
+
+def test_clear_browser_profile_preserves_exported_session(tmp_path):
+    store = SelfServiceSessionStore("12345", tmp_path / "state.json", tmp_path / "profile")
+    store.storage_state_path.write_text('{"cookies":[]}', encoding="utf-8")
+    store.session_storage_state_path.write_text('{"origin":"https://selfservice.example"}', encoding="utf-8")
+    store.user_data_dir.mkdir()
+    (store.user_data_dir / "Preferences").write_text("{}", encoding="utf-8")
+
+    store.clear_browser_profile()
+
+    assert not store.user_data_dir.exists()
+    assert store.storage_state_path.exists()
+    assert store.session_storage_state_path.exists()
 
 
 def test_wizard_test_connection_route_returns_error_without_session(tmp_path, monkeypatch):
@@ -189,7 +317,7 @@ def test_first_run_wizard_contains_background_login_and_secure_fallback():
     assert 'id="selfservice-password"' in FIRST_RUN_TEMPLATE
     assert "Log ind og test forbindelse" in FIRST_RUN_TEMPLATE
     assert "Åbn loginvindue i stedet" in FIRST_RUN_TEMPLATE
-    assert "Credential Manager" in FIRST_RUN_TEMPLATE
+    assert "{{ platform_labels.credential_store }}" in FIRST_RUN_TEMPLATE
 
 
 def test_home_redirects_to_the_only_configured_profile(tmp_path, monkeypatch):
@@ -224,6 +352,30 @@ def test_global_wizard_address_opens_profile_setup(tmp_path, monkeypatch):
     assert b"V\xc3\xa6lg chauff\xc3\xb8rnummer" in response.data
 
 
+def test_relogin_url_opens_login_controls_for_completed_profile(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
+    monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
+    paths = app_module.get_driver_paths("1234")
+    app_module.save_driver_settings(
+        "1234",
+        {
+            "wizard_completed": True,
+            "selfservice_session_verified": False,
+            "user": "tester",
+        },
+    )
+    paths["selfservice_storage_state_path"].write_text('{"cookies":[]}', encoding="utf-8")
+    app_module.app.config["TESTING"] = True
+
+    with app_module.app.test_client() as client:
+        response = client.get("/1234/wizard?relogin=1")
+
+    assert response.status_code == 200
+    assert b"Log ind og test forbindelse" in response.data
+    assert b"\xc3\x85bn loginvindue i stedet" in response.data
+
+
 def test_settings_page_contains_installation_port(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
@@ -237,6 +389,7 @@ def test_settings_page_contains_installation_port(tmp_path, monkeypatch):
     assert response.status_code == 200
     assert b"Lokal server" in response.data
     assert b'name="app_port"' in response.data
+    assert b"Google Calendar" not in response.data
 
 
 def test_settings_can_change_installation_port(tmp_path, monkeypatch):
@@ -252,7 +405,7 @@ def test_settings_can_change_installation_port(tmp_path, monkeypatch):
     payload = response.get_json()
     assert response.status_code == 200
     assert payload["restart_required"] is True
-    assert payload["next_url"] == "http://localhost:8092/wizard/"
+    assert payload["next_url"] == "http://localhost:8092/"
     assert json.loads((tmp_path / "data" / "app-config.json").read_text(encoding="utf-8")) == {"port": 8092}
 
 

@@ -24,6 +24,22 @@ def test_macos_storage_remains_in_project_directory(monkeypatch):
     assert app_module.default_storage_root("darwin") == app_module.BASE_DIR
 
 
+def test_gui_uses_platform_specific_device_and_autostart_labels():
+    windows = app_module.ui_platform_labels("win32")
+    macos = app_module.ui_platform_labels("darwin")
+
+    assert windows == {
+        "local_device": "På denne Windows-pc",
+        "autostart": "Start automatisk med Windows",
+        "credential_store": "Windows Credential Manager",
+    }
+    assert macos == {
+        "local_device": "På denne Mac",
+        "autostart": "Start automatisk med macOS",
+        "credential_store": "macOS-nøgleringen",
+    }
+
+
 def test_storage_root_can_be_overridden_on_both_platforms(tmp_path, monkeypatch):
     monkeypatch.setenv("ROSTERMATE_HOME", str(tmp_path / "custom-data"))
 
@@ -107,7 +123,7 @@ def test_windows_distribution_files_are_present():
     assert "auto_update.py" in windows_launcher
     assert "ensure_available_port" in windows_launcher
     assert "start_tray" in windows_launcher
-    assert 'http://localhost:{port}/wizard/' in windows_launcher
+    assert 'http://localhost:{port}/' in windows_launcher
     assert "STARTUP_TIMEOUT_SECONDS = 120" in windows_launcher
     assert 'capture_output=True' in windows_launcher
     assert 'server_environment["PYTHONUNBUFFERED"] = "1"' in windows_launcher
@@ -149,7 +165,7 @@ def test_macos_app_bootstraps_first_install_and_checks_version():
     run_script = (project_root / "run.command").read_text(encoding="utf-8")
     assert 'python3 tray.py --server-pid "$server_pid"' in run_script
     assert 'wait "$server_pid"' in launcher
-    assert 'http://localhost:$PORT/wizard/' in launcher
+    assert 'http://localhost:$PORT/"' in launcher
     assert (project_root / "uninstall.command").is_file()
     uninstaller = (project_root / "uninstall.command").read_text(encoding="utf-8")
     assert "RosterMate Backup" in uninstaller

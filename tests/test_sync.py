@@ -5,7 +5,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app as app_module
-from app import build_event_from_shift, list_driver_ids, navigate_selfservice_month, open_selfservice_calendar, parse_selfservice_calendar_pages, perform_background_selfservice_login, select_next_calendar_events, software_info, sync_schedule, valid_google_client_id, write_outputs
+from app import build_event_from_shift, list_driver_ids, navigate_selfservice_month, open_selfservice_calendar, parse_selfservice_calendar_pages, perform_background_selfservice_login, select_next_calendar_events, selfservice_login_form_visible, software_info, sync_schedule, write_outputs
 from sync import fetch_status_is_error, run_initial_sync
 
 
@@ -95,7 +95,7 @@ def test_selfservice_month_navigation_reads_actual_month_and_uses_next_button():
     navigate_selfservice_month(page, 2026, 8)
 
     assert (page.year, page.month) == (2026, 8)
-    assert page.clicked == ["#NextMonth, #MonthAndYearSelectorAndNavigators .CalendarNextPeriod"]
+    assert page.clicked == ["#NextMonth:visible, #MonthAndYearSelectorAndNavigators .CalendarNextPeriod:visible"]
 
 
 def test_selfservice_month_navigation_uses_dropdown_when_windows_layout_has_no_button():
@@ -184,6 +184,31 @@ def test_selfservice_calendar_reports_expired_session_before_navigation():
         raise AssertionError("An expired SelfService session should be reported")
 
 
+def test_selfservice_calendar_ignores_hidden_login_fields_after_successful_login():
+    class Locator:
+        def __init__(self, selector):
+            self.selector = selector
+
+        def count(self):
+            return 0 if ":visible" in self.selector else 2
+
+    class Page:
+        def __init__(self):
+            self.calendar_ready = False
+
+        def wait_for_selector(self, selector, **_kwargs):
+            if selector == "#Calendar" and not self.calendar_ready:
+                raise TimeoutError("calendar is not ready")
+
+        def locator(self, selector):
+            return Locator(selector)
+
+        def goto(self, _url, **_kwargs):
+            self.calendar_ready = True
+
+    open_selfservice_calendar(Page(), "https://selfservice.example.test")
+
+
 def test_background_login_uses_fields_and_waits_for_authenticated_marker():
     class Locator:
         first = None
@@ -199,13 +224,23 @@ def test_background_login_uses_fields_and_waits_for_authenticated_marker():
         def fill(self, value):
             self.page.filled[self.selector] = value
 
+        def press_sequentially(self, value, **_kwargs):
+            self.page.filled[self.selector] = value
+
+        def press(self, key):
+            assert key == "Enter"
+            self.page.submissions += 1
+            self.page.authenticated = True
+
         def click(self, **_kwargs):
+            self.page.submissions += 1
             self.page.authenticated = True
 
     class Page:
         def __init__(self):
             self.authenticated = False
             self.filled = {}
+            self.submissions = 0
 
         def locator(self, selector):
             return Locator(self, selector)
@@ -218,27 +253,37 @@ def test_background_login_uses_fields_and_waits_for_authenticated_marker():
 
     assert page.filled == {"input#Username": "tester", "input#Password": "secret"}
     assert page.authenticated is True
+    assert page.submissions == 1
 
 
 def test_background_login_reports_rejected_credentials():
     class Locator:
         first = None
 
-        def __init__(self):
+        def __init__(self, selector):
+            self.selector = selector
             self.first = self
 
         def count(self):
+            if "#Calendar:visible" in self.selector:
+                return 0
             return 2
 
         def fill(self, _value):
+            pass
+
+        def press_sequentially(self, _value, **_kwargs):
+            pass
+
+        def press(self, _key):
             pass
 
         def click(self, **_kwargs):
             pass
 
     class Page:
-        def locator(self, _selector):
-            return Locator()
+        def locator(self, selector):
+            return Locator(selector)
 
         def wait_for_function(self, *_args, **_kwargs):
             pass
@@ -249,6 +294,56 @@ def test_background_login_reports_rejected_credentials():
         assert "afviste login" in str(exc)
     else:
         raise AssertionError("Rejected credentials should produce an actionable error")
+
+
+def test_hidden_login_fields_are_not_treated_as_an_expired_session():
+    class Locator:
+        def __init__(self, selector):
+            self.selector = selector
+
+        def count(self):
+            return 0 if ":visible" in self.selector else 2
+
+    class Page:
+        def locator(self, selector):
+            return Locator(selector)
+
+    assert selfservice_login_form_visible(Page()) is False
+
+
+def test_background_login_accepts_calendar_marker_even_if_login_dom_remains():
+    class Locator:
+        first = None
+
+        def __init__(self, selector):
+            self.selector = selector
+            self.first = self
+
+        def count(self):
+            if "#Calendar:visible" in self.selector:
+                return 1
+            return 2
+
+        def fill(self, _value):
+            pass
+
+        def press_sequentially(self, _value, **_kwargs):
+            pass
+
+        def press(self, _key):
+            pass
+
+        def click(self, **_kwargs):
+            pass
+
+    class Page:
+        def locator(self, selector):
+            return Locator(selector)
+
+        def wait_for_function(self, *_args, **_kwargs):
+            pass
+
+    perform_background_selfservice_login(Page(), {"user": "tester", "pass": "secret"})
 
 
 def test_write_outputs_creates_rfc5545_calendar(tmp_path):
@@ -281,12 +376,6 @@ def test_write_outputs_creates_rfc5545_calendar(tmp_path):
     assert b"DTSTART;VALUE=DATE:20260722\r\n" in calendar
     assert b"DTEND;VALUE=DATE:20260723\r\n" in calendar
     assert b"+0200" not in calendar
-
-
-def test_google_client_id_requires_google_oauth_format():
-    assert valid_google_client_id("123456-example.apps.googleusercontent.com") is True
-    assert valid_google_client_id("dkbusdriver") is False
-    assert valid_google_client_id("") is False
 
 
 def test_lan_access_only_exposes_token_protected_calendar(tmp_path, monkeypatch):
@@ -562,7 +651,7 @@ def test_list_driver_ids_only_returns_configured_numeric_profiles(tmp_path, monk
 def test_fetch_status_distinguishes_errors_from_empty_schedule():
     assert fetch_status_is_error("SelfService-sessionen er udløbet") is True
     assert fetch_status_is_error("Login mislykkedes - tjek login") is True
-    assert fetch_status_is_error("Ingen vagter fundet i kalenderen - muligvis ingen vagter planlagt") is False
+    assert fetch_status_is_error("Ingen vagter fundet i kalenderen - muligvis ingen vagter planlagt") is True
 
 
 def test_initial_sync_does_not_report_old_events_as_new_when_fetch_fails(tmp_path):
@@ -588,6 +677,34 @@ def test_initial_sync_does_not_report_old_events_as_new_when_fetch_fails(tmp_pat
         assert str(exc) == "SelfService-sessionen er udløbet"
     else:
         raise AssertionError("Expected the failed fetch to stop the initial sync")
+
+
+def test_initial_sync_never_replaces_existing_events_with_empty_fetch(tmp_path):
+    paths = {
+        "events_store_path": tmp_path / "events.json",
+        "history_path": tmp_path / "history.json",
+        "output_dir": tmp_path,
+    }
+    write_calls = []
+
+    try:
+        run_initial_sync(
+            "12345",
+            {"days_ahead": 7},
+            paths,
+            lambda _days, _driver: ([], "Ingen vagter fundet i kalenderen"),
+            lambda *args: (args[0], []),
+            lambda *_args: write_calls.append(True),
+            lambda _path, _default: [{"id": "old"}],
+            lambda _path: [],
+            lambda *_args: None,
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "Ingen vagter fundet i kalenderen"
+    else:
+        raise AssertionError("Expected an empty fetch to stop the sync")
+
+    assert write_calls == []
 
 
 def test_settings_route_persists_selfservice_credentials(tmp_path, monkeypatch):
@@ -657,6 +774,47 @@ def test_load_settings_migrates_env_password_to_secure_store(tmp_path, monkeypat
     assert "SELFSERVICE_PASS" not in (tmp_path / ".env").read_text(encoding="utf-8")
 
 
+def test_load_settings_ignores_and_removes_example_username(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
+    monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
+    (tmp_path / ".env").write_text("SELFSERVICE_USER=dit-brugernavn\n", encoding="utf-8")
+    monkeypatch.setattr(app_module, "get_password", lambda _driver_id: "")
+
+    app_module.save_driver_settings("1234", {"user": "stored-driver"})
+    settings = app_module.load_settings("1234")
+
+    assert settings["user"] == "stored-driver"
+    assert "SELFSERVICE_USER" not in (tmp_path / ".env").read_text(encoding="utf-8")
+
+
+def test_saved_gui_preferences_override_env_defaults(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
+    monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
+    (tmp_path / ".env").write_text(
+        "DAYS_AHEAD=7\nRUN_EVERY_MINUTES=60\nREMOVE_OLD_SHIFTS=false\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(app_module, "get_password", lambda _driver_id: "")
+    app_module.save_driver_settings(
+        "1234",
+        {
+            "days_ahead": 21,
+            "run_every_minutes": 180,
+            "remove_old_shifts": True,
+        },
+    )
+
+    settings = app_module.load_settings("1234")
+
+    assert settings["days_ahead"] == 21
+    assert settings["run_every_minutes"] == 180
+    assert settings["remove_old_shifts"] is True
+
+
 def test_new_driver_redirects_to_wizard(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "BASE_DIR", tmp_path)
     monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
@@ -723,6 +881,7 @@ def test_wizard_preferences_renders_shift_preview():
             "wizard_url": "/1234/wizard",
             "wizard_test_connection_url": "/1234/wizard/test-connection",
         },
+        platform_labels=app_module.ui_platform_labels("win32"),
     )
 
     assert "Vagt 42" in rendered

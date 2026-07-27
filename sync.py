@@ -10,6 +10,7 @@ FETCH_ERROR_PREFIXES = (
     "Fejl ved henting",
     "Forbind til SelfService",
     "Kunne ikke",
+    "Ingen vagter fundet",
     "Login mislykkedes",
     "SelfService navigerer stadig",
     "SelfService-sessionen",
@@ -69,12 +70,17 @@ def run_initial_sync(
     load_json: Callable[[Any, Any], Any],
     load_history: Callable[[Any], list[dict[str, Any]]],
     save_history: Callable[[list[dict[str, Any]], Any], None],
+    history_prefix: str = "First run sync",
 ) -> dict[str, Any]:
     days_ahead = int(settings.get("days_ahead", 7))
     existing_events = load_json(paths["events_store_path"], [])
     new_events, status_message = fetch_schedule(days_ahead, driver_id)
 
-    if not new_events and (not existing_events or fetch_status_is_error(status_message)):
+    # Never replace a previously valid calendar with an empty scrape. An empty
+    # SelfService response is ambiguous (closed browser, stale view or no
+    # selected calendar layers) and must be retried rather than treated as a
+    # successful destructive update.
+    if not new_events:
         raise RuntimeError(status_message)
 
     window_start = date.today().strftime("%Y-%m-%d")
@@ -97,7 +103,7 @@ def run_initial_sync(
     history.append(
         {
             "timestamp": __import__("datetime").datetime.now().isoformat(),
-            "summary": f"First run sync: {len(new_events)} vagter hentet",
+            "summary": f"{history_prefix}: {len(new_events)} vagter hentet",
             "changes": changes,
         }
     )

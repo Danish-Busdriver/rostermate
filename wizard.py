@@ -239,7 +239,7 @@ FIRST_RUN_TEMPLATE = r'''
             <div id="welcome-view" class="{{ 'hidden' if welcome_back else '' }}">
                 <h1>Velkommen til RosterMate</h1>
                 <p class="subtitle">Automatisk synkronisering af din vagtplan fra Tide SelfService.</p>
-                <div class="info">🔒 Adgangskoden gemmes i macOS-nøgleringen eller Windows Credential Manager.</div>
+                <div class="info">🔒 Adgangskoden gemmes sikkert i {{ platform_labels.credential_store }}.</div>
                 <div class="credentials">
                     <label>Brugernavn
                         <input id="selfservice-user" autocomplete="username" value="{{ selfservice_user }}" required>
@@ -290,6 +290,9 @@ FIRST_RUN_TEMPLATE = r'''
 
             <div class="status-bar">
                 <small>{{ version }}</small>
+                {% if has_existing_data %}
+                    <a href="{{ urls.dashboard_url }}" style="color:#64748b; text-decoration:none; font-weight:700;">Åbn dashboard</a>
+                {% endif %}
                 <span id="status-pill" class="status-pill {{ 'connected' if welcome_back else 'idle' }}">{{ 'Forbundet' if welcome_back else 'Ikke forbundet' }}</span>
             </div>
         </div>
@@ -557,7 +560,7 @@ WIZARD_PREFERENCES_TEMPLATE = r'''
                             <input id="days_ahead" name="days_ahead" type="number" min="1" max="30" value="{{ settings.days_ahead }}">
                         </div>
                         <label class="check"><input type="checkbox" name="keep_old_shifts" value="true" {% if settings.keep_old_shifts %}checked{% endif %}><span>Behold gamle vagter</span></label>
-                        <label class="check"><input type="checkbox" name="launch_at_login" value="true" {% if settings.launch_at_login %}checked{% endif %}><span>Start automatisk med macOS</span></label>
+                        <label class="check"><input type="checkbox" name="launch_at_login" value="true" {% if settings.launch_at_login %}checked{% endif %}><span>{{ platform_labels.autostart }}</span></label>
                         <label class="check"><input type="checkbox" name="show_menu_bar_icon" value="true" {% if settings.show_menu_bar_icon %}checked{% endif %}><span>Vis ikon i menulinjen</span></label>
                         <label class="check"><input type="checkbox" name="notify_on_changes" value="true" {% if settings.notify_on_changes %}checked{% endif %}><span>Giv besked ved ændringer</span></label>
                     </div>

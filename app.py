@@ -6,7 +6,6 @@ import re
 import secrets
 import socket
 import shutil
-import hashlib
 import subprocess
 import sys
 import threading
@@ -25,7 +24,7 @@ from launch_agent import sync_launch_agent_preference
 from login import launch_authenticated_context, login_manager, read_stable_page_content, save_session_storage
 from port_config import configured_port, port_is_available, save_port, valid_port
 from release_update import check_for_release_update
-from session import SelfServiceSessionStore
+from session_store import SelfServiceSessionStore
 from settings import apply_wizard_preferences, with_setup_defaults
 from sync import build_sync_preview, fetch_status_is_error, run_initial_sync
 from wizard import FIRST_RUN_TEMPLATE, WIZARD_PREFERENCES_TEMPLATE
@@ -60,11 +59,8 @@ SCHEDULE_PATH = OUTPUT_DIR / "schedule.json"
 EVENTS_STORE_PATH = OUTPUT_DIR / "events_store.json"
 CHANGES_PATH = OUTPUT_DIR / "changes.json"
 ICS_PATH = OUTPUT_DIR / "vagter.ics"
-GOOGLE_TOKEN_PATH = DATA_DIR / "google_token.json"
-GOOGLE_SYNC_STATE_PATH = DATA_DIR / "google_sync_state.json"
-GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar"]
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.9.2"
+APP_VERSION = "1.10.0"
 SYNC_LOCKS: dict[str, threading.Lock] = {}
 SYNC_LOCKS_GUARD = threading.Lock()
 
@@ -88,6 +84,21 @@ def fetch_schedule_with_retry(days_ahead: int, driver_id: str, attempts: int = 2
 
 def application_port() -> int:
     return configured_port(root=DATA_DIR.parent)
+
+
+def ui_platform_labels(platform_name: str | None = None) -> dict[str, str]:
+    active_platform = platform_name or sys.platform
+    if active_platform == "win32":
+        return {
+            "local_device": "På denne Windows-pc",
+            "autostart": "Start automatisk med Windows",
+            "credential_store": "Windows Credential Manager",
+        }
+    return {
+        "local_device": "På denne Mac",
+        "autostart": "Start automatisk med macOS",
+        "credential_store": "macOS-nøgleringen",
+    }
 
 
 def is_loopback_request() -> bool:
@@ -165,8 +176,6 @@ def driver_storage_paths(driver_id: str) -> dict[str, Path]:
         "events_store_path": output_dir / "events_store.json",
         "changes_path": output_dir / "changes.json",
         "ics_path": output_dir / "vagter.ics",
-        "google_token_path": data_dir / "google_token.json",
-        "google_sync_state_path": data_dir / "google_sync_state.json",
         "selfservice_storage_state_path": data_dir / "selfservice_storage_state.json",
         "selfservice_user_data_dir": data_dir / "selfservice-browser",
     }
@@ -293,13 +302,18 @@ def load_settings(driver_id: str) -> dict[str, Any]:
         else:
             remove_env_secret(env_path, "SELFSERVICE_PASS")
             env_values.pop("SELFSERVICE_PASS", None)
+    env_user = str(env_values.get("SELFSERVICE_USER", "") or "").strip()
+    if env_user.casefold() in {"dit-brugernavn", "your-username", "username"}:
+        remove_env_secret(env_path, "SELFSERVICE_USER")
+        env_values.pop("SELFSERVICE_USER", None)
+        env_user = ""
     try:
-        days_ahead = int(env_values.get("DAYS_AHEAD", stored.get("days_ahead", 7)))
+        days_ahead = int(stored.get("days_ahead", env_values.get("DAYS_AHEAD", 7)))
     except (TypeError, ValueError):
         days_ahead = 7
 
     try:
-        run_every_minutes = int(env_values.get("RUN_EVERY_MINUTES", stored.get("run_every_minutes", 60)))
+        run_every_minutes = int(stored.get("run_every_minutes", env_values.get("RUN_EVERY_MINUTES", 60)))
     except (TypeError, ValueError):
         run_every_minutes = 60
 
@@ -309,23 +323,15 @@ def load_settings(driver_id: str) -> dict[str, Any]:
 
     return with_setup_defaults({
         **stored,
-        "url": env_values.get("SELFSERVICE_URL", stored.get("url", "https://selfservicedanmark.tidebus.dk")),
-        "user": env_values.get("SELFSERVICE_USER", stored.get("user", "")),
+        "url": stored.get("url") or env_values.get("SELFSERVICE_URL", "https://selfservicedanmark.tidebus.dk"),
+        "user": stored.get("user") or env_user,
         "pass": get_password(driver_id) or stored.get("pass", ""),
         "days_ahead": max(1, min(days_ahead, 365)),
         "run_every_minutes": max(1, min(run_every_minutes, 10080)),
-        "remove_old_shifts": _coerce_bool(env_values.get("REMOVE_OLD_SHIFTS", stored.get("remove_old_shifts", False))),
-        "employment_type": employment_type,
-        "google_client_id": env_values.get("GOOGLE_CLIENT_ID", stored.get("google_client_id", "")),
-        "google_client_secret": env_values.get("GOOGLE_CLIENT_SECRET", stored.get("google_client_secret", "")),
-        "google_oauth_client_file": env_values.get(
-            "GOOGLE_OAUTH_CLIENT_FILE", stored.get("google_oauth_client_file", "")
+        "remove_old_shifts": _coerce_bool(
+            stored.get("remove_old_shifts", env_values.get("REMOVE_OLD_SHIFTS", False))
         ),
-        "google_calendar_id": env_values.get("GOOGLE_CALENDAR_ID", stored.get("google_calendar_id", "")),
-        "google_calendar_name": env_values.get(
-            "GOOGLE_CALENDAR_NAME", stored.get("google_calendar_name", "RosterMate")
-        ).strip() or "RosterMate",
-        "google_redirect_uri": env_values.get("GOOGLE_REDIRECT_URI", stored.get("google_redirect_uri", "")),
+        "employment_type": employment_type,
     })
 
 
@@ -343,6 +349,7 @@ def driver_urls(driver_id: str) -> dict[str, str]:
         "base_path": base_path,
         "dashboard_url": f"{base_path}/",
         "wizard_url": f"{base_path}/wizard",
+        "wizard_relogin_url": f"{base_path}/wizard?relogin=1",
         "wizard_connect_url": f"{base_path}/wizard/connect",
         "wizard_status_url": f"{base_path}/wizard/status",
         "wizard_test_connection_url": f"{base_path}/wizard/test-connection",
@@ -353,9 +360,6 @@ def driver_urls(driver_id: str) -> dict[str, str]:
         "sync_url": f"{base_path}/sync",
         "settings_post_url": f"{base_path}/settings",
         "calendar_url": f"{base_path}/calendar.ics",
-        "google_connect_url": f"{base_path}/google/connect",
-        "google_sync_url": f"{base_path}/google/sync",
-        "google_disconnect_url": f"{base_path}/google/disconnect",
     }
 
 
@@ -614,18 +618,6 @@ def describe_change(change: dict[str, Any]) -> dict[str, str]:
     }
 
 
-def google_redirect_uri(settings: dict[str, Any], driver_id: str, base_url: str | None = None) -> str:
-    configured = str(settings.get("google_redirect_uri", "")).strip()
-    if configured:
-        return configured
-    client_config = load_google_client_config(settings)
-    if client_config and "installed" in client_config:
-        return f"http://localhost:{application_port()}/"
-    if base_url:
-        return f"{base_url.rstrip('/')}/{normalize_driver_id(driver_id)}/google/callback"
-    return f"http://127.0.0.1:{application_port()}/{normalize_driver_id(driver_id)}/google/callback"
-
-
 def local_network_address() -> str:
     override = os.environ.get("ROSTERMATE_LAN_HOST", "").strip()
     if override:
@@ -646,238 +638,6 @@ def calendar_subscription_address(driver_id: str, token: str, public_base_url: s
     if not base_url:
         base_url = f"http://{local_network_address()}:{application_port()}"
     return f"{base_url}/{normalize_driver_id(driver_id)}/calendar.ics?token={token}"
-
-
-def valid_google_client_id(value: Any) -> bool:
-    client_id = str(value or "").strip()
-    return bool(re.fullmatch(r"\d+-[a-z0-9_-]+\.apps\.googleusercontent\.com", client_id, re.IGNORECASE))
-
-
-def load_google_client_config(settings: dict[str, Any]) -> dict[str, Any] | None:
-    configured_path = str(settings.get("google_oauth_client_file") or "").strip()
-    if configured_path:
-        client_path = Path(configured_path).expanduser()
-        try:
-            payload = json.loads(client_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return None
-        client_type = "installed" if "installed" in payload else "web" if "web" in payload else ""
-        client = payload.get(client_type, {}) if client_type else {}
-        if client_type and valid_google_client_id(client.get("client_id")) and client.get("client_secret"):
-            return payload
-
-    if valid_google_client_id(settings.get("google_client_id")) and settings.get("google_client_secret"):
-        return {
-            "web": {
-                "client_id": settings.get("google_client_id", ""),
-                "client_secret": settings.get("google_client_secret", ""),
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "redirect_uris": [str(settings.get("google_redirect_uri") or f"http://127.0.0.1:{application_port()}/google/callback")],
-            }
-        }
-    return None
-
-
-def google_integration_status(settings: dict[str, Any], driver_id: str, token_path: Path, base_url: str | None = None) -> dict[str, Any]:
-    has_client_id = bool(str(settings.get("google_client_id") or "").strip())
-    client_id_valid = valid_google_client_id(settings.get("google_client_id"))
-    client_config = load_google_client_config(settings)
-    credentials_ready = client_config is not None
-    client_type = "desktop" if client_config and "installed" in client_config else "web" if client_config else ""
-    token_data = load_json(token_path, {})
-    connected = bool(token_data.get("refresh_token") or token_data.get("token"))
-    calendar_id = str(settings.get("google_calendar_id") or "")
-    calendar_name = str(settings.get("google_calendar_name") or "RosterMate")
-    if connected:
-        summary = f"Forbundet til Google-kalenderen {calendar_name}."
-        tone = "success"
-    elif credentials_ready:
-        summary = "Google OAuth er klar. Log ind for at forbinde kalenderen."
-        tone = "info"
-    elif str(settings.get("google_oauth_client_file") or "").strip():
-        summary = "Google OAuth JSON-filen kunne ikke læses eller er ugyldig."
-        tone = "warning"
-    elif has_client_id and not client_id_valid:
-        summary = "OAuth Client ID er ugyldigt. Indsæt det fulde Google Client ID, som slutter med .apps.googleusercontent.com."
-        tone = "warning"
-    else:
-        summary = "Tilføj Google OAuth Client ID og Client Secret for at aktivere Google Calendar-sync."
-        tone = "warning"
-
-    return {
-        "credentials_ready": credentials_ready,
-        "client_type": client_type,
-        "client_id_valid": client_id_valid,
-        "connected": connected,
-        "calendar_id": calendar_id,
-        "calendar_name": calendar_name,
-        "redirect_uri": google_redirect_uri(settings, driver_id, base_url),
-        "summary": summary,
-        "tone": tone,
-    }
-
-
-def google_dependencies_available() -> tuple[bool, str]:
-    try:
-        from google_auth_oauthlib.flow import Flow  # noqa: F401
-        from googleapiclient.discovery import build  # noqa: F401
-        return True, ""
-    except ImportError as exc:
-        return False, str(exc)
-
-
-def create_google_flow(settings: dict[str, Any], driver_id: str, base_url: str, state: str | None = None) -> Any:
-    from google_auth_oauthlib.flow import Flow
-
-    client_config = load_google_client_config(settings)
-    if client_config is None:
-        raise RuntimeError("Google OAuth-klienten er ikke konfigureret")
-    flow = Flow.from_client_config(client_config, scopes=GOOGLE_SCOPES, state=state)
-    flow.redirect_uri = google_redirect_uri(settings, driver_id, base_url)
-    return flow
-
-
-def save_google_token(token_path: Path, credentials: Any) -> None:
-    save_json(token_path, json.loads(credentials.to_json()))
-
-
-def load_google_credentials(token_path: Path) -> Any:
-    token_data = load_json(token_path, {})
-    if not token_data:
-        return None
-
-    from google.auth.transport.requests import Request as GoogleRequest
-    from google.oauth2.credentials import Credentials
-
-    credentials = Credentials.from_authorized_user_info(token_data, GOOGLE_SCOPES)
-    if credentials.expired and credentials.refresh_token:
-        credentials.refresh(GoogleRequest())
-        save_google_token(token_path, credentials)
-    return credentials
-
-
-def ensure_google_calendar(settings: dict[str, Any], credentials: Any, service: Any | None = None) -> str:
-    """Create RosterMate's secondary calendar, or keep its configured name in sync."""
-    if service is None:
-        from googleapiclient.discovery import build
-        service = build("calendar", "v3", credentials=credentials)
-
-    calendar_name = str(settings.get("google_calendar_name") or "RosterMate").strip() or "RosterMate"
-    calendar_id = str(settings.get("google_calendar_id") or "").strip()
-
-    if calendar_id and calendar_id != "primary":
-        try:
-            existing = service.calendars().get(calendarId=calendar_id).execute()
-            if str(existing.get("summary") or "") != calendar_name:
-                service.calendars().patch(
-                    calendarId=calendar_id,
-                    body={"summary": calendar_name},
-                ).execute()
-            return calendar_id
-        except Exception as exc:
-            status = getattr(exc, "status_code", None) or getattr(getattr(exc, "resp", None), "status", None)
-            if status != 404:
-                raise
-
-    created = service.calendars().insert(
-        body={"summary": calendar_name, "timeZone": LOCAL_TIMEZONE}
-    ).execute()
-    created_id = str(created.get("id") or "").strip()
-    if not created_id:
-        raise RuntimeError("Google returnerede ikke et kalender-id")
-    return created_id
-
-
-def make_google_event_key(event: dict[str, Any]) -> str:
-    raw_key = "|".join(
-        [
-            str(event.get("date", "")),
-            str(event.get("title", "")),
-            str(event.get("start", "")),
-            str(event.get("end", "")),
-            str(event.get("all_day", False)),
-        ]
-    )
-    return hashlib.sha1(raw_key.encode("utf-8")).hexdigest()
-
-
-def build_google_event_payload(event: dict[str, Any]) -> dict[str, Any]:
-    title = str(event.get("title", "Vagt"))
-    payload = {
-        "summary": title,
-        "description": f"Synkroniseret fra RosterMate\nDato: {event.get('date', '')}",
-        "extendedProperties": {"private": {"rostermate_managed": "true"}},
-    }
-    if event.get("all_day"):
-        try:
-            start_day = date.fromisoformat(str(event.get("date", "")))
-        except ValueError:
-            start_day = date.today()
-        payload["start"] = {"date": start_day.isoformat()}
-        payload["end"] = {"date": (start_day + timedelta(days=1)).isoformat()}
-    else:
-        payload["start"] = {"dateTime": str(event.get("start", "")), "timeZone": LOCAL_TIMEZONE}
-        payload["end"] = {"dateTime": str(event.get("end", event.get("start", ""))), "timeZone": LOCAL_TIMEZONE}
-    return payload
-
-
-def sync_google_calendar_events(events: list[dict[str, Any]], settings: dict[str, Any], token_path: Path, sync_state_path: Path) -> dict[str, int]:
-    credentials = load_google_credentials(token_path)
-    if credentials is None:
-        raise RuntimeError("Google-kontoen er ikke forbundet endnu")
-
-    from googleapiclient.discovery import build
-    from googleapiclient.errors import HttpError
-
-    calendar_id = str(settings.get("google_calendar_id") or "").strip()
-    if not calendar_id:
-        raise RuntimeError("Google-kalenderen er ikke oprettet endnu. Log ind med Google igen.")
-    service = build("calendar", "v3", credentials=credentials)
-    state = load_json(sync_state_path, {"event_map": {}})
-    event_map = state.get("event_map", {}) if isinstance(state, dict) else {}
-
-    inserted = 0
-    updated = 0
-    deleted = 0
-    current_keys: set[str] = set()
-
-    for event in events:
-        event_key = make_google_event_key(event)
-        current_keys.add(event_key)
-        payload = build_google_event_payload(event)
-        google_event_id = event_map.get(event_key)
-
-        if google_event_id:
-            try:
-                service.events().update(calendarId=calendar_id, eventId=google_event_id, body=payload).execute()
-                updated += 1
-                continue
-            except HttpError as exc:
-                if getattr(exc, "status_code", None) != 404 and getattr(exc.resp, "status", None) != 404:
-                    raise
-
-        created = service.events().insert(calendarId=calendar_id, body=payload).execute()
-        event_map[event_key] = created.get("id", "")
-        inserted += 1
-
-    for stale_key in list(event_map.keys()):
-        if stale_key in current_keys:
-            continue
-        google_event_id = event_map.get(stale_key)
-        if not google_event_id:
-            event_map.pop(stale_key, None)
-            continue
-        try:
-            service.events().delete(calendarId=calendar_id, eventId=google_event_id).execute()
-            deleted += 1
-        except HttpError as exc:
-            if getattr(exc, "status_code", None) != 404 and getattr(exc.resp, "status", None) != 404:
-                raise
-        event_map.pop(stale_key, None)
-
-    save_json(sync_state_path, {"event_map": event_map, "calendar_id": calendar_id})
-    return {"inserted": inserted, "updated": updated, "deleted": deleted}
 
 
 def create_backup(source: Path, backup_dir: Path | None = None) -> Path:
@@ -1138,8 +898,7 @@ def open_selfservice_calendar(page: Any, selfservice_url: str) -> None:
     except Exception:
         pass
 
-    login_selector = "input#Username, input#Password"
-    if page.locator(login_selector).count() > 0:
+    if selfservice_login_form_visible(page):
         raise RuntimeError("SelfService-sessionen er udløbet. Forbind til SelfService igen i opsætningsguiden.")
 
     assignments_url = urljoin(selfservice_url.rstrip("/") + "/", "Assignments")
@@ -1149,7 +908,7 @@ def open_selfservice_calendar(page: Any, selfservice_url: str) -> None:
     except Exception:
         pass
 
-    if page.locator(login_selector).count() > 0:
+    if selfservice_login_form_visible(page):
         raise RuntimeError("SelfService-sessionen er udløbet. Forbind til SelfService igen i opsætningsguiden.")
     page.wait_for_selector("#Calendar", state="attached", timeout=30000)
 
@@ -1164,9 +923,9 @@ def navigate_selfservice_month(page: Any, target_year: int, target_month: int) -
 
         forward = current < target
         selector = (
-            "#NextMonth, #MonthAndYearSelectorAndNavigators .CalendarNextPeriod"
+            "#NextMonth:visible, #MonthAndYearSelectorAndNavigators .CalendarNextPeriod:visible"
             if forward
-            else "#PreviousMonth, #MonthAndYearSelectorAndNavigators .CalendarPreviousPeriod"
+            else "#PreviousMonth:visible, #MonthAndYearSelectorAndNavigators .CalendarPreviousPeriod:visible"
         )
         clicked = False
         try:
@@ -1215,7 +974,17 @@ def navigate_selfservice_month(page: Any, target_year: int, target_month: int) -
 
 
 def selfservice_login_form_visible(page: Any) -> bool:
-    return page.locator("input#Username, input#Password").count() > 0
+    # Tide keeps parts of the login form in the DOM after a successful
+    # client-side transition. Only visible fields mean that login is still
+    # required.
+    return page.locator("input#Username:visible, input#Password:visible").count() > 0
+
+
+def selfservice_authenticated_marker_visible(page: Any) -> bool:
+    return page.locator(
+        "#Calendar:visible, #NextMonth:visible, "
+        "input[type='checkbox'][id*='View']:visible"
+    ).count() > 0
 
 
 def perform_background_selfservice_login(page: Any, settings: dict[str, Any]) -> None:
@@ -1226,35 +995,59 @@ def perform_background_selfservice_login(page: Any, settings: dict[str, Any]) ->
             "De gemte SelfService-loginoplysninger mangler. Indtast brugernavn og adgangskode i opsætningsguiden."
         )
 
-    page.locator("input#Username").fill(username)
-    page.locator("input#Password").fill(password)
+    username_field = page.locator("input#Username")
+    username_field.fill(username)
+    password_field = page.locator("input#Password")
+    password_field.fill(password)
     login_button = page.locator(
         "#LoginButton, div.DarkButton, button[type='submit'], input[type='submit']"
     ).first
     try:
         login_button.click(timeout=15000)
     except Exception as exc:
-        raise RuntimeError("SelfService-login-knappen kunne ikke aktiveres.") from exc
+        try:
+            password_field.press("Enter")
+        except Exception as fallback_exc:
+            raise RuntimeError("SelfService-loginformularen kunne ikke indsendes.") from fallback_exc
 
     try:
         page.wait_for_function(
-            """() => Boolean(
-                document.querySelector('#Calendar')
-                || document.querySelector('#NextMonth')
-                || document.querySelector("input[type='checkbox'][id*='View']")
-                || document.querySelector('.validation-summary-errors, .field-validation-error, .error')
-            )""",
+            """() => {
+                const visible = (element) => Boolean(
+                    element
+                    && element.getClientRects().length
+                    && getComputedStyle(element).visibility !== 'hidden'
+                    && getComputedStyle(element).display !== 'none'
+                );
+                return [
+                    document.querySelector('#Calendar'),
+                    document.querySelector('#NextMonth'),
+                    document.querySelector("input[type='checkbox'][id*='View']"),
+                    document.querySelector('.validation-summary-errors'),
+                    document.querySelector('.field-validation-error'),
+                    document.querySelector('.error')
+                ].some(visible);
+            }""",
             timeout=30000,
         )
     except Exception:
         pass
+    if selfservice_authenticated_marker_visible(page):
+        return
     if selfservice_login_form_visible(page):
         raise RuntimeError(
             "SelfService afviste login eller sendte tilbage til login-siden. Kontrollér brugernavn og adgangskode i opsætningsguiden."
         )
 
 
-def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[dict[str, Any]], str]:
+def fetch_selfservice_schedule(
+    days_ahead: int,
+    driver_id: str,
+    *,
+    allow_credential_login: bool = True,
+    headless: bool = True,
+    hide_window: bool = False,
+) -> tuple[list[dict[str, Any]], str]:
     paths = get_driver_paths(driver_id)
     settings = load_settings(driver_id)
     session_store = SelfServiceSessionStore.from_paths(driver_id, paths)
@@ -1268,7 +1061,12 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
     html_pages: list[str] = []
     try:
         with sync_playwright() as p:
-            browser, context = launch_authenticated_context(p, session_store, headless=True)
+            browser, context = launch_authenticated_context(
+                p,
+                session_store,
+                headless=headless,
+                hide_window=hide_window,
+            )
             page = context.new_page()
             page.set_default_timeout(30000)
 
@@ -1285,7 +1083,22 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
                 f.write(initial_html[:10000])
 
             if selfservice_login_form_visible(page):
-                perform_background_selfservice_login(page, settings)
+                if not allow_credential_login:
+                    context.close()
+                    if browser is not None:
+                        browser.close()
+                    return [], "SelfService-sessionen er udløbet"
+                try:
+                    perform_background_selfservice_login(page, settings)
+                except Exception:
+                    try:
+                        page.screenshot(
+                            path=str(paths["output_dir"] / "debug_login_failure.png"),
+                            full_page=True,
+                        )
+                    except Exception:
+                        pass
+                    raise
 
                 try:
                     page.wait_for_selector("#Loading", state="hidden", timeout=15000)
@@ -1389,10 +1202,6 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
     if not html_pages:
         return [], "Kunne ikke hente HTML fra SelfService"
 
-    # Tjek om vi kunne logge ind (hvis vi er tilbage på login-siden)
-    if "Username" in html_pages[-1] and "Password" in html_pages[-1]:
-        return [], "Login mislykkedes - tjek brugernavn og adgangskode"
-
     if not all("Arbejdskalender" in html for html in html_pages):
         return [], "Siden loadede ikke korrekt - ikke på arbejdskalender siden"
     today = date.today()
@@ -1402,13 +1211,104 @@ def fetch_selfservice_schedule(days_ahead: int, driver_id: str) -> tuple[list[di
     return events, f"Synkronisering gennemført - {len(events)} vagter hentet"
 
 
+def fetch_selfservice_schedule_from_authenticated_page(
+    page: Any,
+    days_ahead: int,
+    driver_id: str,
+) -> tuple[list[dict[str, Any]], str]:
+    """Fetch the first schedule in the interactive context that completed login."""
+    paths = get_driver_paths(driver_id)
+    settings = load_settings(driver_id)
+    html_pages: list[str] = []
+
+    try:
+        open_selfservice_calendar(page, settings["url"])
+        today_month = date.today().replace(day=1)
+        navigate_selfservice_month(page, today_month.year, today_month.month)
+
+        html = read_stable_page_content(page)
+        if html is None:
+            return [], "SelfService navigerer stadig. Prøv synkroniseringen igen om et øjeblik."
+        html_pages.append(html)
+
+        window_end = date.today() + timedelta(days=days_ahead)
+        current_month = today_month
+        final_month = window_end.replace(day=1)
+        while current_month < final_month:
+            if current_month.month == 12:
+                current_month = current_month.replace(year=current_month.year + 1, month=1)
+            else:
+                current_month = current_month.replace(month=current_month.month + 1)
+            navigate_selfservice_month(page, current_month.year, current_month.month)
+            month_html = read_stable_page_content(page)
+            if month_html is None:
+                return [], f"Kunne ikke hente {current_month:%m/%Y} fra SelfService"
+            html_pages.append(month_html)
+
+        debug_path = paths["output_dir"] / "debug_html.log"
+        debug_path.write_text(
+            "\n<!-- ROSTERMATE MONTH BREAK -->\n".join(html_pages)[:300000],
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        return [], f"SelfService-kalenderen kunne ikke åbnes: {exc}"
+
+    if not all("Arbejdskalender" in html for html in html_pages):
+        return [], "Siden loadede ikke korrekt - ikke på arbejdskalender siden"
+    today = date.today()
+    events = parse_selfservice_calendar_pages(
+        html_pages,
+        today,
+        today + timedelta(days=days_ahead),
+    )
+    if not events:
+        return [], "Ingen vagter fundet i kalenderen - muligvis ingen vagter planlagt"
+    return events, f"Synkronisering gennemført - {len(events)} vagter hentet"
+
+
+def run_interactive_initial_sync(
+    page: Any,
+    driver_id: str,
+    settings: dict[str, Any],
+    paths: dict[str, Path],
+    history_prefix: str = "First run sync",
+) -> dict[str, Any]:
+    sync_lock = driver_sync_lock(driver_id)
+    if not sync_lock.acquire(blocking=False):
+        raise RuntimeError("En synkronisering kører allerede. Prøv igen om et øjeblik.")
+    try:
+        fetched = fetch_selfservice_schedule_from_authenticated_page(
+            page,
+            int(settings.get("days_ahead", 30)),
+            driver_id,
+        )
+        result = run_initial_sync(
+            driver_id,
+            settings,
+            paths,
+            lambda _days, _driver_id: fetched,
+            sync_schedule,
+            write_outputs,
+            load_json,
+            load_history,
+            save_history,
+            history_prefix,
+        )
+        save_driver_settings(driver_id, {**settings, "selfservice_session_verified": True})
+    finally:
+        sync_lock.release()
+    return {
+        "sync_complete": True,
+        "preview": result["preview"],
+        "count": result["count"],
+        "events": len(result["events"]),
+        "message": result["message"],
+    }
+
+
 @app.route("/", methods=["GET", "POST"])
 def home() -> Any:
     notice = ""
-    if request.method == "GET" and (request.args.get("code") or request.args.get("error")):
-        oauth_driver_id = session.get("google_oauth_driver_id")
-        if oauth_driver_id:
-            return google_callback(str(oauth_driver_id))
     driver_ids = list_driver_ids()
     if request.method == "GET" and len(driver_ids) == 1 and request.args.get("choose") != "1":
         only_driver_id = driver_ids[0]
@@ -1416,7 +1316,11 @@ def home() -> Any:
         settings = load_settings(only_driver_id)
         session_store = SelfServiceSessionStore.from_paths(only_driver_id, paths)
         session["last_driver_id"] = only_driver_id
-        if should_show_first_run(settings, session_store) or should_show_welcome_back(settings, session_store):
+        has_existing_data = bool(
+            load_json(paths["events_store_path"], [])
+            or load_history(paths["history_path"])
+        )
+        if should_show_first_run(settings, session_store, has_existing_data=has_existing_data):
             return redirect(url_for("wizard_page", driver_id=only_driver_id))
         return redirect(url_for("index", driver_id=only_driver_id))
 
@@ -1431,7 +1335,11 @@ def home() -> Any:
             paths = get_driver_paths(safe_driver_id)
             settings = load_settings(safe_driver_id)
             session_store = SelfServiceSessionStore.from_paths(safe_driver_id, paths)
-            if should_show_first_run(settings, session_store) or should_show_welcome_back(settings, session_store):
+            has_existing_data = bool(
+                load_json(paths["events_store_path"], [])
+                or load_history(paths["history_path"])
+            )
+            if should_show_first_run(settings, session_store, has_existing_data=has_existing_data):
                 return redirect(url_for("wizard_page", driver_id=safe_driver_id))
             return redirect(url_for("index", driver_id=safe_driver_id))
 
@@ -1541,12 +1449,17 @@ def wizard_page(driver_id: str) -> str:
     history = load_history(paths["history_path"])
     session_store = SelfServiceSessionStore.from_paths(safe_driver_id, paths)
     urls = driver_urls(safe_driver_id)
-    welcome_back = should_show_welcome_back(settings, session_store)
+    force_relogin = request.args.get("relogin") == "1"
+    welcome_back = should_show_welcome_back(settings, session_store) and not force_relogin
 
-    if session_store.has_saved_session() and not settings.get("wizard_completed"):
+    if session_store.has_saved_session() and not settings.get("wizard_completed") and not force_relogin:
         return redirect(urls["wizard_preferences_url"])
 
-    if not should_show_first_run(settings, session_store) and not welcome_back:
+    if not force_relogin and not should_show_first_run(
+        settings,
+        session_store,
+        has_existing_data=bool(history),
+    ) and not welcome_back:
         return redirect(urls["dashboard_url"])
 
     return render_template_string(
@@ -1558,6 +1471,8 @@ def wizard_page(driver_id: str) -> str:
         last_sync=format_timestamp(history[-1].get("timestamp") if history else None),
         selfservice_user=settings.get("user", ""),
         has_saved_password=bool(settings.get("pass")),
+        has_existing_data=bool(history),
+        platform_labels=ui_platform_labels(),
     )
 
 
@@ -1594,7 +1509,18 @@ def wizard_connect(driver_id: str) -> tuple[Any, int]:
         flow = login_manager.start_background(safe_driver_id)
         return jsonify({"status": "ok", "flow_id": flow.flow_id, "message": flow.message}), 200
 
-    flow = login_manager.start(safe_driver_id, settings["url"], session_store)
+    flow = login_manager.start(
+        safe_driver_id,
+        settings["url"],
+        session_store,
+        initial_sync=lambda page: run_interactive_initial_sync(
+            page,
+            safe_driver_id,
+            settings,
+            paths,
+        ),
+        credentials=(str(settings.get("user", "")), str(settings.get("pass", ""))),
+    )
     return jsonify({"status": "ok", "flow_id": flow.flow_id, "message": flow.message}), 200
 
 
@@ -1610,15 +1536,25 @@ def wizard_status(driver_id: str) -> tuple[Any, int]:
     if flow.state == "connected" and not flow.payload.get("sync_complete"):
         sync_lock = driver_sync_lock(safe_driver_id)
         if not sync_lock.acquire(blocking=False):
-            return jsonify({"status": "ok", "state": "syncing", "message": "En synkronisering kører allerede."}), 200
+            return jsonify({
+                "status": "ok",
+                "state": "syncing",
+                "message": "Synkroniseringen fortsætter i baggrunden…",
+            }), 200
         login_manager.update(flow_id, state="syncing", message="⟳ Synkroniserer…")
         try:
             settings = load_settings(safe_driver_id)
+            initial_fetch = flow.payload.get("initial_fetch")
+            fetcher = (
+                (lambda _days, _driver_id: initial_fetch)
+                if isinstance(initial_fetch, tuple) and len(initial_fetch) == 2
+                else fetch_schedule_with_retry
+            )
             result = run_initial_sync(
                 safe_driver_id,
                 settings,
                 paths,
-                fetch_schedule_with_retry,
+                fetcher,
                 sync_schedule,
                 write_outputs,
                 load_json,
@@ -1626,8 +1562,10 @@ def wizard_status(driver_id: str) -> tuple[Any, int]:
                 save_history,
             )
         except Exception as exc:
+            save_driver_settings(safe_driver_id, {**settings, "selfservice_session_verified": False})
             flow = login_manager.update(flow_id, state="error", message=str(exc))
         else:
+            save_driver_settings(safe_driver_id, {**settings, "selfservice_session_verified": True})
             flow = login_manager.update(
                 flow_id,
                 state="synced",
@@ -1685,6 +1623,7 @@ def wizard_preferences(driver_id: str) -> str:
         preview=preview,
         preview_count=len(load_json(paths["events_store_path"], [])),
         urls=driver_urls(safe_driver_id),
+        platform_labels=ui_platform_labels(),
     )
 
 
@@ -1715,7 +1654,11 @@ def index(driver_id: str) -> str:
         settings = {**settings, "calendar_access_token": secrets.token_urlsafe(24)}
         save_driver_settings(safe_driver_id, settings)
     session_store = SelfServiceSessionStore.from_paths(safe_driver_id, paths)
-    if should_show_first_run(settings, session_store):
+    has_existing_data = bool(
+        load_json(paths["events_store_path"], [])
+        or load_history(paths["history_path"])
+    )
+    if should_show_first_run(settings, session_store, has_existing_data=has_existing_data):
         return redirect(url_for("wizard_page", driver_id=safe_driver_id))
     events = load_json(paths["events_store_path"], [])
     changes = load_json(paths["changes_path"], [])
@@ -1726,7 +1669,6 @@ def index(driver_id: str) -> str:
     dashboard_changes = [describe_change(change) for change in changes[:5]]
     history_count = len(history)
     ics_ready = paths["ics_path"].exists() and paths["ics_path"].stat().st_size > 0
-    google_status = google_integration_status(settings, safe_driver_id, paths["google_token_path"])
     urls = driver_urls(safe_driver_id)
     local_calendar_url = f"http://127.0.0.1:{application_port()}{urls['calendar_url']}"
     lan_calendar_url = calendar_subscription_address(
@@ -1739,7 +1681,10 @@ def index(driver_id: str) -> str:
         if public_calendar_base_url
         else ""
     )
-    needs_selfservice_setup = not session_store.has_saved_session()
+    needs_selfservice_setup = (
+        not session_store.has_saved_session()
+        or not settings.get("selfservice_session_verified")
+    )
     show_profile_switcher = len(list_driver_ids()) > 1
     app_port = application_port()
     update_status = check_for_release_update(STORAGE_ROOT / "release_update.json", APP_VERSION)
@@ -2290,12 +2235,14 @@ def index(driver_id: str) -> str:
                     text.textContent = message;
                     notif.style.background = type === 'error' ? '#ef4444' : '#10b981';
                     notif.style.display = 'block';
-                    setTimeout(() => {
-                        notif.style.display = 'none';
-                        if (type === 'success') {
+                    notif.title = type === 'error' ? 'Klik for at lukke' : '';
+                    notif.onclick = type === 'error' ? () => { notif.style.display = 'none'; } : null;
+                    if (type !== 'error') {
+                        setTimeout(() => {
+                            notif.style.display = 'none';
                             setTimeout(() => location.reload(), 1000);
-                        }
-                    }, 3000);
+                        }, 3000);
+                    }
                 }
 
                 function handleFormSubmit(e, endpoint) {
@@ -2309,13 +2256,36 @@ def index(driver_id: str) -> str:
                     })
                     .then(r => r.json())
                     .then(data => {
-                        if (data.status === 'ok') {
+                        if (data.status === 'ok' && data.flow_id && data.status_url) {
+                            showNotification(data.message || 'SelfService-login åbnes…', 'success');
+                            pollInteractiveSync(data.status_url);
+                        } else if (data.status === 'ok') {
                             showNotification(data.message || 'Færdig', 'success');
                         } else {
                             showNotification(data.message || 'Fejl', 'error');
                         }
                     })
                     .catch(err => showNotification('Netværksfejl: ' + err.message, 'error'));
+                }
+
+                function pollInteractiveSync(statusUrl) {
+                    const poll = () => {
+                        fetch(statusUrl)
+                            .then(r => r.json())
+                            .then(data => {
+                                if (data.state === 'synced') {
+                                    showNotification(data.message || 'Synkronisering gennemført', 'success');
+                                    return;
+                                }
+                                if (data.state === 'error') {
+                                    showNotification(data.message || 'Synkroniseringen fejlede', 'error');
+                                    return;
+                                }
+                                setTimeout(poll, 1000);
+                            })
+                            .catch(err => showNotification('Netværksfejl: ' + err.message, 'error'));
+                    };
+                    poll();
                 }
             </script>
         </head>
@@ -2395,7 +2365,11 @@ def index(driver_id: str) -> str:
                                 </div>
                                 <div class="hero-actions">
                                     <button type="submit">Synk nu</button>
+                                    {% if needs_selfservice_setup %}
+                                    <a class="button-link secondary" href="{{ urls.wizard_relogin_url }}">Forbind SelfService</a>
+                                    {% else %}
                                     <a class="button-link secondary" href="{{ urls.settings_url }}">Åbn indstillinger</a>
+                                    {% endif %}
                                 </div>
                             </form>
                         </div>
@@ -2524,7 +2498,7 @@ def index(driver_id: str) -> str:
                                     <strong>ICS eksport</strong>
                                     <div class="small">{{ 'Kalenderfilen er klar til brug.' if ics_ready else 'Kalenderfilen oprettes efter første sync.' }}</div>
                                     <div style="margin-top:0.8rem;"><a class="button-link ghost" href="{{ urls.calendar_url }}">Åbn fil</a></div>
-                                    <div class="small" style="margin-top:0.7rem;"><strong>På denne Mac</strong></div>
+                                    <div class="small" style="margin-top:0.7rem;"><strong>{{ platform_labels.local_device }}</strong></div>
                                     <div class="small" style="overflow-wrap:anywhere;">{{ local_calendar_url }}</div>
                                     <div class="small" style="margin-top:0.7rem;"><strong>Samme Wi-Fi</strong></div>
                                     <div class="small" style="overflow-wrap:anywhere;">{{ lan_calendar_url }}</div>
@@ -2532,11 +2506,6 @@ def index(driver_id: str) -> str:
                                     <div class="small" style="margin-top:0.7rem;"><strong>Overalt via HTTPS</strong></div>
                                     <div class="small" style="overflow-wrap:anywhere;">{{ public_calendar_url }}</div>
                                     {% endif %}
-                                </div>
-                                <div class="quick-card">
-                                    <strong>Google Calendar</strong>
-                                    <div class="small">{{ google_status.summary }}</div>
-                                    <div style="margin-top:0.8rem;"><a class="button-link ghost" href="{{ urls.settings_url }}">Forbind</a></div>
                                 </div>
                             </div>
                         </div>
@@ -2563,7 +2532,6 @@ def index(driver_id: str) -> str:
         dashboard_changes=dashboard_changes,
         history_count=history_count,
         ics_ready=ics_ready,
-        google_status=google_status,
         urls=urls,
         local_calendar_url=local_calendar_url,
         lan_calendar_url=lan_calendar_url,
@@ -2573,6 +2541,7 @@ def index(driver_id: str) -> str:
         app_port=app_port,
         needs_selfservice_setup=needs_selfservice_setup,
         update_status=update_status,
+        platform_labels=ui_platform_labels(),
     )
 
 
@@ -2611,33 +2580,65 @@ def sync_route(driver_id: str) -> tuple[Any, int]:
     safe_driver_id = normalize_driver_id(driver_id)
     settings = load_settings(safe_driver_id)
     days_ahead = int(request.form.get("days_ahead", settings.get("days_ahead", 7)))
-    remove_old_shifts = request.form.get("remove_old_shifts") == "true"
+    updated_settings = {
+        **settings,
+        "days_ahead": days_ahead,
+        "remove_old_shifts": request.form.get("remove_old_shifts") == "true",
+    }
+    save_driver_settings(safe_driver_id, updated_settings)
+    saved_events, saved_status = fetch_selfservice_schedule(
+        days_ahead,
+        safe_driver_id,
+        allow_credential_login=True,
+        headless=True,
+    )
+    if saved_events:
+        result = run_initial_sync(
+            safe_driver_id,
+            updated_settings,
+            paths,
+            lambda _days, _driver_id: (saved_events, saved_status),
+            sync_schedule,
+            write_outputs,
+            load_json,
+            load_history,
+            save_history,
+            "Synkronisering",
+        )
+        save_driver_settings(
+            safe_driver_id,
+            {**updated_settings, "selfservice_session_verified": True},
+        )
+        return jsonify({
+            "status": "ok",
+            "message": result["message"],
+            "events": result["events"],
+            "changes": result["changes"],
+        }), 200
 
-    sync_lock = driver_sync_lock(safe_driver_id)
-    if not sync_lock.acquire(blocking=False):
-        return jsonify({"status": "error", "message": "En synkronisering kører allerede. Prøv igen om et øjeblik."}), 409
-    try:
-        existing_events = load_json(paths["events_store_path"], [])
-        new_events, status_message = fetch_schedule_with_retry(days_ahead, safe_driver_id)
-
-        if not new_events and (not existing_events or fetch_status_is_error(status_message)):
-            return jsonify({"status": "error", "message": status_message}), 400
-
-        window_start = date.today().strftime("%Y-%m-%d")
-        window_end = (date.today() + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
-        updated_events, changes = sync_schedule(existing_events, new_events, window_start, window_end, remove_old_shifts, paths["output_dir"])
-        if paths["events_store_path"].exists() and paths["events_store_path"].stat().st_size:
-            create_backup(paths["events_store_path"], paths["backup_dir"])
-        write_outputs(updated_events, changes, paths["output_dir"])
-
-        history = load_history(paths["history_path"])
-        history.append({"timestamp": datetime.now().isoformat(), "summary": f"Synkroniserede {len(new_events)} vagter", "changes": changes})
-        save_history(history, paths["history_path"])
-        save_driver_settings(safe_driver_id, {**settings, "days_ahead": days_ahead, "remove_old_shifts": remove_old_shifts})
-
-        return jsonify({"status": "ok", "message": status_message, "events": updated_events, "changes": changes})
-    finally:
-        sync_lock.release()
+    session_store = SelfServiceSessionStore.from_paths(safe_driver_id, paths)
+    flow = login_manager.start(
+        safe_driver_id,
+        updated_settings["url"],
+        session_store,
+        initial_sync=lambda page: run_interactive_initial_sync(
+            page,
+            safe_driver_id,
+            updated_settings,
+            paths,
+            "Synkronisering",
+        ),
+        credentials=(
+            str(updated_settings.get("user", "")),
+            str(updated_settings.get("pass", "")),
+        ),
+    )
+    return jsonify({
+        "status": "ok",
+        "flow_id": flow.flow_id,
+        "status_url": url_for("wizard_status", driver_id=safe_driver_id, flow_id=flow.flow_id),
+        "message": "SelfService-login åbnes. Log ind, så henter RosterMate vagterne.",
+    }), 200
 
 
 @app.route("/<driver_id>/settings-page")
@@ -2649,8 +2650,6 @@ def settings_page(driver_id: str) -> str:
     session_store = SelfServiceSessionStore.from_paths(safe_driver_id, paths)
     notice = request.args.get("notice", "")
     notice_type = request.args.get("notice_type", "success")
-    google_status = google_integration_status(settings, safe_driver_id, paths["google_token_path"], request.url_root)
-    google_available, google_dependency_error = google_dependencies_available()
     urls = driver_urls(safe_driver_id)
     has_selfservice_session = session_store.has_saved_session()
     needs_selfservice_setup = not has_selfservice_session
@@ -2867,13 +2866,6 @@ def settings_page(driver_id: str) -> str:
                 .notice.success { background: #e8f7ef; color: #166534; }
                 .notice.error { background: #fce9e7; color: #b42318; }
                 .notice.warning { background: #fff4db; color: #9a6700; }
-                .google-actions {
-                    display: flex;
-                    gap: 0.7rem;
-                    flex-wrap: wrap;
-                    margin-top: 1rem;
-                }
-                .google-actions form { margin: 0; }
                 .ghost-button {
                     display: inline-flex;
                     align-items: center;
@@ -2897,7 +2889,6 @@ def settings_page(driver_id: str) -> str:
                         flex-direction: column;
                         align-items: stretch;
                     }
-                    .google-actions,
                     .helper-links {
                         flex-direction: column;
                     }
@@ -2914,9 +2905,13 @@ def settings_page(driver_id: str) -> str:
                     text.textContent = message;
                     notif.style.background = type === 'error' ? '#ef4444' : '#10b981';
                     notif.style.display = 'block';
-                    setTimeout(() => {
-                        notif.style.display = 'none';
-                    }, 3000);
+                    notif.title = type === 'error' ? 'Klik for at lukke' : '';
+                    notif.onclick = type === 'error' ? () => { notif.style.display = 'none'; } : null;
+                    if (type !== 'error') {
+                        setTimeout(() => {
+                            notif.style.display = 'none';
+                        }, 3000);
+                    }
                 }
 
                 function handleSettingsSubmit(e) {
@@ -3039,8 +3034,8 @@ def settings_page(driver_id: str) -> str:
                                         <div class="field-hint">Normalt behøver du ikke ændre denne adresse.</div>
                                     </div>
                                     <div class="inline-actions">
-                                        <a class="ghost-button" href="{{ urls.wizard_url }}">Åbn opsætningsguide</a>
-                                        <a class="ghost-button" href="{{ urls.wizard_url }}">Skift SelfService-konto</a>
+                                        <a class="ghost-button" href="{{ urls.wizard_relogin_url }}">Åbn opsætningsguide</a>
+                                        <a class="ghost-button" href="{{ urls.wizard_relogin_url }}">Skift SelfService-konto</a>
                                     </div>
                                     {% if needs_selfservice_setup %}
                                     <div class="field-hint">Indtast login i opsætningsguiden. Adgangskoden gemmes aldrig i settings.json.</div>
@@ -3081,50 +3076,6 @@ def settings_page(driver_id: str) -> str:
                                     <div class="field-hint">En ændring træder i kraft, næste gang RosterMate genstartes. Kalenderlinks og opsætningsguiden følger automatisk den valgte port.</div>
                                 </div>
                             </div>
-                            <div class="section span-2">
-                                <h2>Google Calendar</h2>
-                                <div class="small">Log ind med din Google-konto og synkronisér de lokale vagter direkte til en Google Kalender.</div>
-                                {% if not google_available %}
-                                <div class="notice warning" style="margin-top:1rem; margin-bottom:0;">Google-afhængigheder mangler: {{ google_dependency_error }}</div>
-                                {% endif %}
-                                <div class="field">
-                                    <label for="google_calendar_name">Navn på Google-kalender</label>
-                                    <input id="google_calendar_name" name="google_calendar_name" value="{{ settings.google_calendar_name }}" placeholder="RosterMate">
-                                    <div class="field-hint">RosterMate foreslås automatisk. Du kan vælge et andet navn før login.</div>
-                                </div>
-                                <div class="small" style="margin-top:0.9rem;">Status: {{ google_status.summary }}</div>
-                                <div class="google-actions">
-                                    <a class="ghost-button" href="{{ urls.google_connect_url }}" onclick="this.href='{{ urls.google_connect_url }}?google_calendar_name=' + encodeURIComponent(document.getElementById('google_calendar_name').value || 'RosterMate')">Log ind med Google</a>
-                                    <form onsubmit="handleActionSubmit(event, '{{ urls.google_sync_url }}')">
-                                        <button type="submit">Synkronisér til Google</button>
-                                    </form>
-                                    <form onsubmit="handleActionSubmit(event, '{{ urls.google_disconnect_url }}')">
-                                        <button type="submit" class="ghost-button">Afbryd forbindelse</button>
-                                    </form>
-                                </div>
-                                <details style="margin-top:1rem;">
-                                    <summary style="cursor:pointer; font-weight:700;">Avanceret OAuth-opsætning</summary>
-                                    <div class="field">
-                                        <label for="google_client_id">OAuth Client ID</label>
-                                        <input id="google_client_id" name="google_client_id" value="{{ settings.google_client_id }}">
-                                    </div>
-                                    <div class="field">
-                                        <label for="google_client_secret">OAuth Client Secret</label>
-                                        <input id="google_client_secret" name="google_client_secret" type="password" value="{{ settings.google_client_secret }}">
-                                    </div>
-                                    <div class="field">
-                                        <label for="google_redirect_uri">Redirect URI</label>
-                                        <input id="google_redirect_uri" name="google_redirect_uri" value="{{ settings.google_redirect_uri or google_status.redirect_uri }}">
-                                    </div>
-                                    {% if settings.google_calendar_id %}
-                                    <div class="field">
-                                        <label>Oprettet Google Calendar ID</label>
-                                        <input value="{{ settings.google_calendar_id }}" readonly>
-                                    </div>
-                                    {% endif %}
-                                    <div class="small">Disse felter konfigureres én gang for RosterMate. Derefter bruger du kun “Log ind med Google”.</div>
-                                </details>
-                            </div>
                         </div>
                         <div class="helper-links">
                             <button type="submit">Gem indstillinger</button>
@@ -3141,9 +3092,6 @@ def settings_page(driver_id: str) -> str:
         settings=settings,
         notice=notice,
         notice_type=notice_type,
-        google_status=google_status,
-        google_available=google_available,
-        google_dependency_error=google_dependency_error,
         urls=urls,
         has_selfservice_session=has_selfservice_session,
         show_profile_switcher=show_profile_switcher,
@@ -3176,13 +3124,6 @@ def settings_route(driver_id: str) -> tuple[Any, int]:
         "run_every_minutes": int(request.form.get("run_every_minutes", settings.get("run_every_minutes", 60))),
         "remove_old_shifts": remove_old_shifts,
         "employment_type": employment_type,
-        "google_client_id": request.form.get("google_client_id", settings.get("google_client_id", "")).strip(),
-        "google_client_secret": request.form.get("google_client_secret", settings.get("google_client_secret", "")).strip(),
-        "google_calendar_id": settings.get("google_calendar_id", ""),
-        "google_calendar_name": request.form.get(
-            "google_calendar_name", settings.get("google_calendar_name", "RosterMate")
-        ).strip() or "RosterMate",
-        "google_redirect_uri": request.form.get("google_redirect_uri", settings.get("google_redirect_uri", "")).strip(),
         "calendar_public_base_url": request.form.get(
             "calendar_public_base_url", settings.get("calendar_public_base_url", "")
         ).strip().rstrip("/"),
@@ -3208,131 +3149,8 @@ def settings_route(driver_id: str) -> tuple[Any, int]:
         "employment_type": employment_type,
         "port": requested_port,
         "restart_required": port_changed,
-        "next_url": f"http://localhost:{requested_port}/wizard/",
+        "next_url": f"http://localhost:{requested_port}/",
     })
-
-
-@app.route("/<driver_id>/google/connect")
-def google_connect(driver_id: str) -> Any:
-    paths = get_driver_paths(driver_id)
-    safe_driver_id = normalize_driver_id(driver_id)
-    settings = load_settings(safe_driver_id)
-    calendar_name = request.args.get("google_calendar_name", settings.get("google_calendar_name", "RosterMate")).strip() or "RosterMate"
-    settings["google_calendar_name"] = calendar_name
-    save_driver_settings(safe_driver_id, settings)
-    google_status = google_integration_status(settings, safe_driver_id, paths["google_token_path"], request.url_root)
-    if not google_status["credentials_ready"]:
-        notice = (
-            "Google OAuth JSON-filen kunne ikke læses eller er ugyldig."
-            if str(settings.get("google_oauth_client_file") or "").strip()
-            else "Konfigurér en Google Desktop OAuth JSON-fil før login."
-        )
-        return redirect(url_for("settings_page", driver_id=safe_driver_id, notice=notice, notice_type="warning"))
-
-    google_available, dependency_error = google_dependencies_available()
-    if not google_available:
-        return redirect(url_for("settings_page", driver_id=safe_driver_id, notice=f"Google-afhængigheder mangler: {dependency_error}", notice_type="error"))
-
-    flow = create_google_flow(settings, safe_driver_id, request.url_root)
-    authorization_url, state = flow.authorization_url(
-        access_type="offline",
-        include_granted_scopes="true",
-        prompt="consent",
-    )
-    session["google_oauth_state"] = state
-    session["google_oauth_driver_id"] = safe_driver_id
-    return redirect(authorization_url)
-
-
-@app.route("/<driver_id>/google/callback")
-def google_callback(driver_id: str) -> Any:
-    paths = get_driver_paths(driver_id)
-    safe_driver_id = normalize_driver_id(driver_id)
-    settings = load_settings(safe_driver_id)
-    google_available, dependency_error = google_dependencies_available()
-    if not google_available:
-        return redirect(url_for("settings_page", driver_id=safe_driver_id, notice=f"Google-afhængigheder mangler: {dependency_error}", notice_type="error"))
-
-    state = session.get("google_oauth_state")
-    oauth_driver_id = session.get("google_oauth_driver_id")
-    if not state or oauth_driver_id != safe_driver_id:
-        return redirect(url_for("settings_page", driver_id=safe_driver_id, notice="OAuth-sessionen mangler. Start login igen.", notice_type="warning"))
-
-    try:
-        flow = create_google_flow(settings, safe_driver_id, request.url_root, state)
-        flow.fetch_token(authorization_response=request.url)
-        save_google_token(paths["google_token_path"], flow.credentials)
-        calendar_id = ensure_google_calendar(settings, flow.credentials)
-        settings["google_calendar_id"] = calendar_id
-        save_driver_settings(safe_driver_id, settings)
-    except Exception as exc:
-        return redirect(url_for("settings_page", driver_id=safe_driver_id, notice=f"Google-login fejlede: {exc}", notice_type="error"))
-
-    history = load_history(paths["history_path"])
-    history.append({"timestamp": datetime.now().isoformat(), "summary": "Forbandt Google Calendar", "changes": []})
-    save_history(history, paths["history_path"])
-    session.pop("google_oauth_state", None)
-    session.pop("google_oauth_driver_id", None)
-    return redirect(
-        url_for(
-            "settings_page",
-            driver_id=safe_driver_id,
-            notice=f"Google-kalenderen {settings['google_calendar_name']} er oprettet og forbundet",
-            notice_type="success",
-        )
-    )
-
-
-@app.route("/<driver_id>/google/sync", methods=["POST"])
-def google_sync(driver_id: str) -> tuple[Any, int]:
-    paths = get_driver_paths(driver_id)
-    safe_driver_id = normalize_driver_id(driver_id)
-    settings = load_settings(safe_driver_id)
-    google_status = google_integration_status(settings, safe_driver_id, paths["google_token_path"])
-    if not google_status["credentials_ready"]:
-        return jsonify({"status": "error", "message": "Google OAuth credentials mangler i indstillinger"}), 400
-
-    google_available, dependency_error = google_dependencies_available()
-    if not google_available:
-        return jsonify({"status": "error", "message": f"Google-afhængigheder mangler: {dependency_error}"}), 400
-
-    events = load_json(paths["events_store_path"], [])
-    if not events:
-        return jsonify({"status": "error", "message": "Ingen lokale kalenderposter at synkronisere"}), 400
-
-    try:
-        result = sync_google_calendar_events(events, settings, paths["google_token_path"], paths["google_sync_state_path"])
-    except Exception as exc:
-        return jsonify({"status": "error", "message": f"Google-sync fejlede: {exc}"}), 400
-
-    history = load_history(paths["history_path"])
-    history.append(
-        {
-            "timestamp": datetime.now().isoformat(),
-            "summary": f"Google-sync: {result['inserted']} nye, {result['updated']} opdaterede, {result['deleted']} slettede",
-            "changes": [],
-        }
-    )
-    save_history(history, paths["history_path"])
-    return jsonify({
-        "status": "ok",
-        "message": f"Google Calendar opdateret: {result['inserted']} nye, {result['updated']} opdaterede, {result['deleted']} slettede",
-        "result": result,
-    })
-
-
-@app.route("/<driver_id>/google/disconnect", methods=["POST"])
-def google_disconnect(driver_id: str) -> tuple[Any, int]:
-    paths = get_driver_paths(driver_id)
-    if paths["google_token_path"].exists():
-        paths["google_token_path"].unlink()
-    if paths["google_sync_state_path"].exists():
-        paths["google_sync_state_path"].unlink()
-
-    history = load_history(paths["history_path"])
-    history.append({"timestamp": datetime.now().isoformat(), "summary": "Afbryd Google Calendar-forbindelse", "changes": []})
-    save_history(history, paths["history_path"])
-    return jsonify({"status": "ok", "message": "Google Calendar-forbindelsen er fjernet"})
 
 
 @app.route("/<driver_id>/history")

@@ -11,11 +11,13 @@ Denne guide indeholder installation, opdatering og teknisk drift af RosterMate p
 
 ## Anbefalet installation
 
-Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.9.2-macOS.pkg`, og dobbeltklik på filen. Du behøver ikke åbne Terminal.
+Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.10.0-macOS.pkg`, og dobbeltklik på filen. Du behøver ikke åbne Terminal.
 
 Installationsprogrammet placerer RosterMate i **Programmer**, kontrollerer en kompatibel officiel Python-version, opretter appens eget isolerede miljø og installerer alle Python-afhængigheder samt Chromium-browseren til SelfService. macOS beder om administratorgodkendelse. RosterMate bruger port 8080, hvis den er ledig; ellers vælges automatisk den første ledige port frem til 8179. Efter installationen starter appen og åbner opsætningsguiden automatisk på den valgte port. Første installation kan tage et par minutter.
 
 SelfService-adgangskoden gemmes i macOS-nøgleringen og skrives ikke i RosterMates indstillingsfiler. Wizarden logger normalt ind skjult. Det separate loginvindue bruges kun som reserve, hvis SelfService kræver ekstra godkendelse.
+
+Gemte valg fra dashboard og indstillinger har forrang over standardværdier i `.env`. Eksempelbrugernavne fra installationsskabelonen ignoreres og fjernes automatisk. En tom eller afbrudt SelfService-hentning må aldrig erstatte den seneste gyldige kalender.
 
 macOS-pakken indeholder kun den fælles RosterMate-app og macOS-filer. Windows-installationsscripts og Windows-ikoner medtages ikke.
 
@@ -36,7 +38,7 @@ Installationsscriptet henter om nødvendigt Python, opretter et virtuelt miljø,
 Åbn derefter:
 
 ```text
-http://localhost:<valgt-port>/wizard/
+http://localhost:<valgt-port>/
 ```
 
 Følg opsætningsguiden i browseren for at oprette en chaufførprofil og forbinde til SelfService.
@@ -101,7 +103,7 @@ Dashboardet kan vise tre adresser:
 
 Lokalnetværks- og internetadresser indeholder et personligt token. Del ikke hele linket offentligt.
 
-Den lokale port gælder for hele installationen. Den kan ændres under **Indstillinger → Lokal server** og træder i kraft efter genstart. RosterMate opdaterer automatisk lokale kalenderlinks, Google callback-adresser og wizard-adressen til den valgte port.
+Den lokale port gælder for hele installationen. Den kan ændres under **Indstillinger → Lokal server** og træder i kraft efter genstart. RosterMate opdaterer automatisk lokale kalenderlinks og appens startadresse til den valgte port.
 
 ### Offentlig HTTPS-adresse
 
@@ -114,20 +116,6 @@ cp docs/Caddyfile.example Caddyfile.local
 Indsæt eget domæne og chaufførnummer i `Caddyfile.local`. Filen må ikke committes. Ekstern TCP-port 80 videresendes til Mac-port 8081, og ekstern TCP-port 443 videresendes til Mac-port 8443.
 
 Mac’en skal have en reserveret lokal IP, domænet skal pege på routerens offentlige IP, og forbindelsen må ikke være blokeret af CGNAT. Brug DDNS, hvis den offentlige IP kan ændre sig.
-
-## Google Calendar
-
-Den almindelige bruger vælger blot kalendernavnet — `RosterMate` foreslås automatisk — og trykker **Log ind med Google**. Efter godkendelsen opretter RosterMate selv en separat Google-kalender og gemmer dens ID lokalt under chaufførprofilen.
-
-App-ejeren skal konfigurere RosterMates fælles OAuth-klient én gang, før knappen kan bruges. Den anbefalede klienttype er **Desktop app**, som åbner Googles login i brugerens normale browser og vender tilbage til `http://localhost:<valgt-port>/`:
-
-1. Aktivér Google Calendar API i Google Cloud.
-2. Konfigurér OAuth-samtykkeskærmen.
-3. Opret en OAuth-klient af typen **Desktop app**.
-4. Download klientkonfigurationen som JSON.
-5. Gem filen lokalt og sæt dens sti som `GOOGLE_OAUTH_CLIENT_FILE` i `.env`.
-
-Eksempel: `GOOGLE_OAUTH_CLIENT_FILE=/Users/dit-navn/rostermate-google-oauth.json`. Gem aldrig JSON-filen i GitHub eller i en offentlig releasefil. En offentlig app med mange brugere kan desuden kræve Googles OAuth-verifikation.
 
 ## Test installationen
 

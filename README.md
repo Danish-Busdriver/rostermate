@@ -31,8 +31,6 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 - Vise de næste syv forskellige kalenderdage på dashboardet
 - Eksportere vagter til Apple Kalender og andre ICS-kompatible kalendere
 - Dele kalenderen lokalt, på samme Wi-Fi eller via en valgfri offentlig HTTPS-adresse
-- Logge ind med Google i standardbrowseren og automatisk oprette eller genbruge en separat kalender med valgfrit navn
-- Bruge en lokal Desktop OAuth-fil uden at kræve manuelle Client ID-felter fra brugeren
 - Registrere ændringer og gemme historik
 - Holde flere chaufførprofiler adskilt
 - Opdatere Git-baserede installationer automatisk fra den stabile GitHub-version
@@ -42,8 +40,10 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 - Gemme login-sessionen først, når SelfServices kalender er færdigindlæst og stabil
 - Logge ind skjult fra wizarden med adgangskoden sikkert gemt i operativsystemets nøglelager
 - Bruge et synligt SelfService-vindue som reserve ved ekstra godkendelse eller ændret loginflow
+- Genbruge gemte loginoplysninger automatisk og ignorere installationsskabelonens eksempelværdier
 - Genkende en returnering til loginformularen og skelne mellem manglende, afviste og udløbne loginoplysninger
 - Forhindre dobbelte synkroniseringer, genforsøge midlertidige fejl og tage backup før kalenderen erstattes
+- Bevare den seneste gyldige kalender, hvis SelfService returnerer en tom eller afbrudt hentning
 - Køre den samme GUI og synkroniseringsmotor på macOS og Windows
 - Klargøre en ny Mac-installation automatisk og åbne opsætningsguiden ved første start
 - Hente Python, app-afhængigheder og SelfService-browseren automatisk under installationen
@@ -72,10 +72,6 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 
 [![RosterMate vagtoversigt](assets/screenshots/overview.png)](assets/screenshots/overview.png)
 
-### Google Calendar
-
-[![RosterMate Google Calendar-opsætning](assets/screenshots/google-calendar.png)](assets/screenshots/google-calendar.png)
-
 ### Indstillinger og lokal port
 
 [![RosterMate indstillinger med lokal serverport](assets/screenshots/settings.png)](assets/screenshots/settings.png)
@@ -95,7 +91,6 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 - [x] Automatiske softwareopdateringer
 - [x] Windows-beta med installation, start og autostart
 - [x] Klikbar Windows Setup.exe med Start-menu-genvej og afinstallation
-- [x] Google-login med automatisk oprettelse og navngivning af en separat kalender
 
 ### Næste versioner
 
@@ -115,8 +110,8 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 
 ## Installation
 
-- [Download RosterMate PKG til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.9.2-macOS.pkg)
-- [Download RosterMate Setup.exe til Windows (beta)](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.9.2-Windows-Setup.exe)
+- [Download RosterMate PKG til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.10.0-macOS.pkg)
+- [Download RosterMate Setup.exe til Windows (beta)](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.10.0-Windows-Setup.exe)
 
 Begge platforme har en tydelig afinstallationskommando. Har du brug for hjælp, finder du de separate vejledninger til [macOS](docs/INSTALL_MACOS.md) og [Windows](docs/INSTALL_WINDOWS.md).
 

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-VERSION="${1:-1.9.2}"
+VERSION="${1:-1.10.0}"
 BUILD_PARENT="$SCRIPT_DIR/dist/.pkg-build"
 mkdir -p "$BUILD_PARENT"
 BUILD_DIR="$(mktemp -d "$BUILD_PARENT/rostermate-pkg.XXXXXX")"
@@ -18,7 +18,14 @@ trap cleanup EXIT
 
 mkdir -p "$PAYLOAD_DIR" "$OUTPUT_DIR"
 
-(cd "$SCRIPT_DIR" && COPYFILE_DISABLE=1 git ls-files --cached --others --exclude-standard -z | COPYFILE_DISABLE=1 cpio -0 -pdm "$PAYLOAD_DIR")
+(
+  cd "$SCRIPT_DIR"
+  COPYFILE_DISABLE=1 git ls-files --cached --others --exclude-standard -z |
+    while IFS= read -r -d '' file; do
+      [ -e "$file" ] && printf '%s\0' "$file"
+    done |
+    COPYFILE_DISABLE=1 cpio -0 -pdm "$PAYLOAD_DIR"
+)
 rm -rf "$PAYLOAD_DIR/.venv" "$PAYLOAD_DIR/data" "$PAYLOAD_DIR/output" \
   "$PAYLOAD_DIR/backups" "$PAYLOAD_DIR/.pytest_cache" "$PAYLOAD_DIR/dist" \
   "$PAYLOAD_DIR/.github" "$PAYLOAD_DIR/tests" "$PAYLOAD_DIR/installer"
@@ -40,12 +47,12 @@ chmod +x "$SCRIPT_DIR/installer/macos/scripts/postinstall"
   --root "$PAYLOAD_DIR" \
   --install-location "/Applications/RosterMate" \
   --scripts "$SCRIPT_DIR/installer/macos/scripts" \
-  --identifier "dk.pullen.rostermate.pkg" \
+  --identifier "io.github.danish-busdriver.rostermate.pkg" \
   --version "$VERSION" \
   "$COMPONENT_PKG"
 
 cp "$SCRIPT_DIR/installer/macos/distribution.xml" "$BUILD_DIR/distribution.xml"
-sed -i '' "s/version=\"1.9.2\"/version=\"$VERSION\"/" "$BUILD_DIR/distribution.xml"
+sed -i '' "s/version=\"1.10.0\"/version=\"$VERSION\"/" "$BUILD_DIR/distribution.xml"
 
 /usr/bin/productbuild \
   --distribution "$BUILD_DIR/distribution.xml" \

@@ -9,11 +9,26 @@ import traceback
 import urllib.request
 from pathlib import Path
 
+PROJECT_DIR = Path(__file__).resolve().parent
+
+
+def installed_user_data_root(project_dir: Path = PROJECT_DIR) -> Path:
+    """Resolve the owning user's data directory even when launched by a service."""
+    try:
+        local_app_data = project_dir.parents[1]
+        if project_dir.parent.name.lower() == "programs" and local_app_data.name.lower() == "local":
+            return local_app_data / "RosterMate"
+    except IndexError:
+        pass
+    return Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "RosterMate"
+
+
+DATA_ROOT = installed_user_data_root()
+os.environ["ROSTERMATE_HOME"] = str(DATA_ROOT)
+
 from port_config import configured_port, ensure_available_port
 
 
-PROJECT_DIR = Path(__file__).resolve().parent
-DATA_ROOT = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "RosterMate"
 LOG_DIR = DATA_ROOT / "logs"
 LAUNCHER_LOG = LOG_DIR / "launcher.log"
 STARTUP_TIMEOUT_SECONDS = 120
@@ -76,19 +91,24 @@ def start_tray(server_pid: int) -> None:
     if os.environ.get("ROSTERMATE_NO_TRAY") == "1":
         return
     pythonw = Path(sys.executable).with_name("pythonw.exe")
+    tray_stdout = (LOG_DIR / "tray.stdout.log").open("a", encoding="utf-8")
+    tray_stderr = (LOG_DIR / "tray.stderr.log").open("a", encoding="utf-8")
     subprocess.Popen(
         [str(pythonw), "tray.py", "--server-pid", str(server_pid)],
         cwd=PROJECT_DIR,
+        env=os.environ.copy(),
+        stdout=tray_stdout,
+        stderr=tray_stderr,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     log(f"Tray-ikon startet for serverproces {server_pid}.")
 
 
-def open_wizard(port: int) -> None:
-    url = f"http://localhost:{port}/wizard/"
+def open_roster_mate(port: int) -> None:
+    url = f"http://localhost:{port}/"
     if os.environ.get("ROSTERMATE_NO_BROWSER") != "1":
         os.startfile(url)  # type: ignore[attr-defined]
-    log(f"Wizard klar på {url}")
+    log(f"RosterMate klar på {url}")
 
 
 def launch() -> int:
@@ -98,7 +118,7 @@ def launch() -> int:
     existing_health = health(port)
     if existing_health and existing_health.get("version") == expected:
         start_tray(listener_pid(port))
-        open_wizard(port)
+        open_roster_mate(port)
         return 0
 
     update = subprocess.run(
@@ -141,7 +161,7 @@ def launch() -> int:
         status = health(port)
         if status and status.get("version") == expected:
             start_tray(server.pid)
-            open_wizard(port)
+            open_roster_mate(port)
             return 0
         if status and status.get("version") != expected:
             log(f"Port {port} svarede med en anden RosterMate-version: {status.get('version')!r}.")

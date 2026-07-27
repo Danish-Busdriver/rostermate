@@ -3,13 +3,14 @@ from __future__ import annotations
 import json
 import threading
 import time
+import traceback
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urljoin
 
-from session import SelfServiceSessionStore
+from session_store import SelfServiceSessionStore
 
 
 TRANSIENT_NAVIGATION_ERRORS = (
@@ -17,8 +18,11 @@ TRANSIENT_NAVIGATION_ERRORS = (
     "execution context was destroyed",
 )
 
-LOGIN_FIELD_SELECTOR = "input#Username, input#Password"
-AUTHENTICATED_MARKER_SELECTOR = "#Calendar, #NextMonth, input[type='checkbox'][id*='View']"
+LOGIN_FIELD_SELECTOR = "input#Username:visible, input#Password:visible"
+AUTHENTICATED_MARKER_SELECTOR = (
+    "#Calendar:visible, #NextMonth:visible, "
+    "input[type='checkbox'][id*='View']:visible"
+)
 
 
 def read_stable_page_content(page: Any, attempts: int = 8) -> str | None:
@@ -50,28 +54,58 @@ def detect_selfservice_login_state(page: Any) -> str:
         raise
 
 
+def prefill_selfservice_credentials(page: Any, username: str, password: str) -> None:
+    """Fill the visible login form without submitting it automatically."""
+    if not username or not password or detect_selfservice_login_state(page) != "login":
+        return
+    page.locator("input#Username:visible").first.fill(username)
+    page.locator("input#Password:visible").first.fill(password)
+
+
 def launch_authenticated_context(
     playwright: Any,
     session_store: SelfServiceSessionStore,
     *,
     headless: bool,
+    hide_window: bool = False,
 ) -> tuple[Any | None, Any]:
     """Reuse the persistent driver profile that completed the interactive login."""
+    launch_options: dict[str, Any] = {"headless": headless}
+    if hide_window and not headless:
+        launch_options["args"] = [
+            "--window-position=-32000,-32000",
+            "--start-minimized",
+        ]
     if session_store.user_data_dir.exists():
         context = playwright.chromium.launch_persistent_context(
             user_data_dir=str(session_store.user_data_dir),
-            headless=headless,
+            **launch_options,
         )
+        restore_saved_cookies(context, session_store)
         restore_session_storage(context, session_store)
         return None, context
 
-    browser = playwright.chromium.launch(headless=headless)
+    browser = playwright.chromium.launch(**launch_options)
     context_options: dict[str, Any] = {}
     if session_store.has_saved_session():
         context_options["storage_state"] = str(session_store.storage_state_path)
     context = browser.new_context(**context_options)
     restore_session_storage(context, session_store)
     return browser, context
+
+
+def restore_saved_cookies(context: Any, session_store: SelfServiceSessionStore) -> None:
+    """Restore session cookies that Chromium drops when the login window closes."""
+    path = session_store.storage_state_path
+    if not path.exists() or path.stat().st_size == 0:
+        return
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    cookies = payload.get("cookies", []) if isinstance(payload, dict) else []
+    if isinstance(cookies, list) and cookies:
+        context.add_cookies(cookies)
 
 
 def save_session_storage(page: Any, session_store: SelfServiceSessionStore) -> None:
@@ -126,13 +160,25 @@ class SelfServiceLoginManager:
         self._lock = threading.Lock()
         self._flows: dict[str, LoginFlowState] = {}
 
-    def start(self, driver_id: str, login_url: str, session_store: SelfServiceSessionStore) -> LoginFlowState:
+    def start(
+        self,
+        driver_id: str,
+        login_url: str,
+        session_store: SelfServiceSessionStore,
+        initial_sync: Callable[[Any], Any] | None = None,
+        credentials: tuple[str, str] | None = None,
+    ) -> LoginFlowState:
         flow_id = uuid.uuid4().hex
         state = LoginFlowState(flow_id=flow_id, driver_id=driver_id, state="launching", message="Åbner SelfService-login…")
         with self._lock:
             self._flows[flow_id] = state
 
-        thread = threading.Thread(target=self._run_flow, args=(flow_id, login_url, session_store), daemon=True)
+        thread = threading.Thread(
+            target=self._run_flow,
+            args=(flow_id, login_url, session_store, initial_sync),
+            kwargs={"credentials": credentials},
+            daemon=True,
+        )
         thread.start()
         return state
 
@@ -206,7 +252,14 @@ class SelfServiceLoginManager:
             except Exception:
                 pass
 
-    def _run_flow(self, flow_id: str, login_url: str, session_store: SelfServiceSessionStore) -> None:
+    def _run_flow(
+        self,
+        flow_id: str,
+        login_url: str,
+        session_store: SelfServiceSessionStore,
+        initial_sync: Callable[[Any], Any] | None = None,
+        credentials: tuple[str, str] | None = None,
+    ) -> None:
         context = None
         try:
             from playwright.sync_api import sync_playwright
@@ -222,6 +275,8 @@ class SelfServiceLoginManager:
                 )
                 page = context.pages[0] if context.pages else context.new_page()
                 page.goto(login_url, wait_until="domcontentloaded")
+                if credentials is not None:
+                    prefill_selfservice_credentials(page, credentials[0], credentials[1])
                 self.update(flow_id, state="awaiting_login", message="Venter på at du logger ind i SelfService…")
 
                 deadline = time.time() + 900
@@ -252,15 +307,49 @@ class SelfServiceLoginManager:
                             pass
                         save_session_storage(page, session_store)
                         context.storage_state(path=str(session_store.storage_state_path), indexed_db=True)
+                        initial_result = None
+                        if initial_sync is not None:
+                            # Fetch the first calendar directly in the browser
+                            # that the user just authenticated. Tide rejects an
+                            # immediate automated login in a second context.
+                            self.update(flow_id, state="syncing", message="Henter dine vagter…")
+                            initial_result = initial_sync(page)
                         context.close()
                         context = None
-                        self.update(flow_id, state="connected", message="Forbundet til SelfService")
+                        if isinstance(initial_result, dict) and initial_result.get("sync_complete"):
+                            payload = initial_result
+                            final_state = "synced"
+                            final_message = str(initial_result.get("message", "Synkronisering gennemført"))
+                        else:
+                            payload = {"initial_fetch": initial_result} if initial_result is not None else {}
+                            final_state = "connected"
+                            final_message = "Forbundet til SelfService"
+                        self.update(
+                            flow_id,
+                            state=final_state,
+                            message=final_message,
+                            payload=payload,
+                        )
                         return
                     page.wait_for_timeout(500)
 
             self.update(flow_id, state="error", message="Login timed out. Prøv igen.")
         except Exception as exc:
-            self.update(flow_id, state="error", message=f"Kunne ikke åbne SelfService-login: {exc}")
+            try:
+                error_path = session_store.storage_state_path.parent / "wizard_error.log"
+                error_path.parent.mkdir(parents=True, exist_ok=True)
+                error_path.write_text(
+                    f"{time.strftime('%Y-%m-%d %H:%M:%S')} SelfService wizard error\n"
+                    f"{traceback.format_exc()}",
+                    encoding="utf-8",
+                )
+            except Exception:
+                pass
+            if "Target page, context or browser has been closed" in str(exc):
+                message = "SelfService-vinduet blev lukket, før synkroniseringen var færdig. Prøv igen og lad vinduet lukke automatisk."
+            else:
+                message = f"Kunne ikke åbne SelfService-login: {exc}"
+            self.update(flow_id, state="error", message=message)
         finally:
             try:
                 if context is not None:

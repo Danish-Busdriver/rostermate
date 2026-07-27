@@ -10,7 +10,7 @@ Windows-udgaven bruger samme dashboard, SelfService-synkronisering, profiler, hi
 
 ## Anbefalet installation
 
-1. Download `RosterMate-1.9.2-Windows-Setup.exe` fra den seneste GitHub Release.
+1. Download `RosterMate-1.10.0-Windows-Setup.exe` fra den seneste GitHub Release.
 2. Dobbeltklik på installationsfilen.
 3. Vælg eventuelt en skrivebordsgenvej og gennemfør guiden.
 4. Lad installationsprogrammet hente Python, RosterMates afhængigheder og Chromium.
@@ -44,7 +44,7 @@ run-windows.cmd
 Startscriptet kontrollerer GitHub-opdateringer, genstarter kun en proces der kan identificeres som en ældre RosterMate-version, vælger ellers en ledig port, starter den aktuelle server skjult og kontrollerer dens versionsnummer, før browseren åbnes:
 
 ```text
-http://localhost:<valgt-port>/wizard/
+http://localhost:<valgt-port>/
 ```
 
 Mens appen kører, vises RosterMate-logoet i Windows-systembakken. Højreklik på ikonet for at åbne dashboardet eller afslutte RosterMate. Start-menu- og skrivebordsgenveje bruger det samme logo.
@@ -52,6 +52,8 @@ Mens appen kører, vises RosterMate-logoet i Windows-systembakken. Højreklik p�
 RosterMate bruger port 8080, hvis den er ledig. Hvis et andet program allerede bruger den, vælges automatisk den første ledige port frem til 8179. Porten kan senere ændres under **Indstillinger → Lokal server** og træder i kraft efter genstart.
 
 SelfService-adgangskoden gemmes i Windows Credential Manager via systemets sikre credential-API og skrives ikke i RosterMates indstillingsfiler. Wizarden logger normalt ind skjult. Det separate loginvindue bruges kun som reserve, hvis SelfService kræver ekstra godkendelse.
+
+Gemte valg fra dashboard og indstillinger har forrang over standardværdier i `.env`. Eksempelbrugernavne som `dit-brugernavn` ignoreres og fjernes automatisk, så guiden ikke kan blive overskrevet af installationsskabelonen. En tom eller afbrudt SelfService-hentning må aldrig erstatte den seneste gyldige kalender.
 
 Logfiler gemmes under:
 
@@ -109,12 +111,6 @@ Afinstallationen stopper RosterMate og fjerner automatiske loginopgaver, program
 - En offentlig HTTPS-adresse kræver domæne, TLS-proxy og router-/tunnelopsætning.
 
 Windows Firewall kan spørge, om Python må modtage trafik. Tillad kun private netværk, medmindre en afgrænset HTTPS-proxy er konfigureret.
-
-## Google Calendar
-
-Brugeren vælger et kalendernavn — `RosterMate` foreslås automatisk — og trykker **Log ind med Google**. Efter godkendelsen opretter appen en separat Google-kalender og gemmer dens ID lokalt under chaufførprofilen.
-
-App-ejeren skal først aktivere Google Calendar API og oprette en OAuth-klient af typen **Desktop app**. Download klientens JSON-fil lokalt og sæt dens sti som `GOOGLE_OAUTH_CLIENT_FILE` i `.env`, for eksempel `C:\Users\Navn\RosterMate\google-oauth.json`. JSON-filen må ikke lægges i GitHub eller releasearkiver. Desktop-flowet åbner Googles login i standardbrowseren og vender tilbage til `http://localhost:<valgt-port>/`.
 
 ## Automatiske opdateringer
 
