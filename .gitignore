@@ -13,3 +13,5 @@ output/
 dist/
 Caddyfile.local
 rostermate-tray.pid
+release_update.json
+release_update.json.tmp

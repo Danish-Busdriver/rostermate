@@ -32,7 +32,8 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 - Bruge en lokal Desktop OAuth-fil uden at kræve manuelle Client ID-felter fra brugeren
 - Registrere ændringer og gemme historik
 - Holde flere chaufførprofiler adskilt
-- Opdatere softwaren automatisk fra den stabile GitHub-version
+- Opdatere Git-baserede installationer automatisk fra den stabile GitHub-version
+- Kontrollere GitHub Releases én gang i døgnet og vise en platformstilpasset downloadknap ved nye versioner
 - Opbevare SelfService-session og kalenderdata lokalt
 - Kontrollere SelfService-login via få loginmarkører uden at læse hele siden i loginvinduet
 - Køre den samme GUI og synkroniseringsmotor på macOS og Windows
@@ -106,8 +107,8 @@ Du slipper for at kopiere vagter manuelt, bladre frem og tilbage mellem måneder
 
 ## Installation
 
-- [Download RosterMate PKG til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.7.3-macOS.pkg)
-- [Download RosterMate Setup.exe til Windows (beta)](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.7.3-Windows-Setup.exe)
+- [Download RosterMate PKG til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.8.0-macOS.pkg)
+- [Download RosterMate Setup.exe til Windows (beta)](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.8.0-Windows-Setup.exe)
 
 Begge platforme har en tydelig afinstallationskommando. Har du brug for hjælp, finder du de separate vejledninger til [macOS](docs/INSTALL_MACOS.md) og [Windows](docs/INSTALL_WINDOWS.md).
 

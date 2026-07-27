@@ -20,6 +20,7 @@ from dashboard import should_show_first_run, should_show_welcome_back
 from launch_agent import sync_launch_agent_preference
 from login import launch_authenticated_context, login_manager, read_stable_page_content, save_session_storage
 from port_config import configured_port, port_is_available, save_port, valid_port
+from release_update import check_for_release_update
 from session import SelfServiceSessionStore
 from settings import apply_wizard_preferences, with_setup_defaults
 from sync import build_sync_preview, fetch_status_is_error, run_initial_sync
@@ -59,7 +60,7 @@ GOOGLE_TOKEN_PATH = DATA_DIR / "google_token.json"
 GOOGLE_SYNC_STATE_PATH = DATA_DIR / "google_sync_state.json"
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar"]
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.7.3"
+APP_VERSION = "1.8.0"
 
 
 def application_port() -> int:
@@ -1542,6 +1543,7 @@ def index(driver_id: str) -> str:
     needs_selfservice_setup = not session_store.has_saved_session()
     show_profile_switcher = len(list_driver_ids()) > 1
     app_port = application_port()
+    update_status = check_for_release_update(STORAGE_ROOT / "release_update.json", APP_VERSION)
 
     return render_template_string(
         """
@@ -1626,6 +1628,29 @@ def index(driver_id: str) -> str:
                     background: var(--accent-2);
                     color: white;
                     border-color: var(--accent-2);
+                }
+                .update-banner {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 1rem;
+                    margin-bottom: 1rem;
+                    padding: 1rem 1.15rem;
+                    border: 1px solid #f3cf74;
+                    border-radius: 18px;
+                    background: var(--warning-bg);
+                    color: var(--warning-text);
+                    box-shadow: var(--shadow);
+                }
+                .update-banner-copy {
+                    display: grid;
+                    gap: 0.2rem;
+                }
+                .update-banner .button-link {
+                    flex: 0 0 auto;
+                    background: var(--warning-text);
+                    color: white;
+                    border-color: var(--warning-text);
                 }
                 .profile-switcher {
                     display: flex;
@@ -2120,6 +2145,15 @@ def index(driver_id: str) -> str:
                         {% endif %}
                     </div>
                 </div>
+                {% if update_status.available and update_status.download_url %}
+                <div class="update-banner" role="status">
+                    <div class="update-banner-copy">
+                        <strong>Ny RosterMate-version er tilgængelig</strong>
+                        <span>Version {{ update_status.latest_version }} kan hentes til {{ 'Windows' if update_status.platform == 'win32' else 'macOS' }}.</span>
+                    </div>
+                    <a class="button-link" href="{{ update_status.download_url }}" target="_blank" rel="noopener noreferrer">Hent opdatering</a>
+                </div>
+                {% endif %}
                 <div class="hero">
                     <div class="hero-shell">
                         <div class="hero-copy">
@@ -2339,6 +2373,7 @@ def index(driver_id: str) -> str:
         show_profile_switcher=show_profile_switcher,
         app_port=app_port,
         needs_selfservice_setup=needs_selfservice_setup,
+        update_status=update_status,
     )
 
 

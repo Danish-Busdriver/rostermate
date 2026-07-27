@@ -182,3 +182,16 @@ def test_shared_tray_uses_the_rostermate_logo_and_expected_actions():
     assert "Åbn RosterMate" in tray
     assert "Afslut RosterMate" in tray
     assert (project_root / "assets" / "RosterMate.ico").is_file()
+
+
+def test_dashboard_contains_daily_platform_release_notice():
+    project_root = Path(__file__).resolve().parents[1]
+    app_source = (project_root / "app.py").read_text(encoding="utf-8")
+    update_source = (project_root / "release_update.py").read_text(encoding="utf-8")
+
+    assert 'STORAGE_ROOT / "release_update.json"' in app_source
+    assert "update_status.available" in app_source
+    assert "Hent opdatering" in app_source
+    assert "CHECK_INTERVAL_SECONDS = 24 * 60 * 60" in update_source
+    assert 'expected_suffix = ".pkg" if platform_name == "darwin" else "-Windows-Setup.exe"' in update_source
+    assert "certifi.where()" in update_source
