@@ -12,11 +12,13 @@ class RandomSource(Protocol):
 SCHEDULE_KEY = "automatic_sync_times"
 LAST_ATTEMPT_KEY = "last_automatic_sync_slot"
 RAMME_KEY = "ramme_daily"
+TIMELOENNET_KEY = "timeloennet_daily"
 TUESDAY_KEY = "turnus_tuesday"
 THURSDAY_KEY = "turnus_thursday"
 
 WINDOWS = {
     RAMME_KEY: (-1, 12 * 60, 14 * 60),
+    TIMELOENNET_KEY: (-1, 9 * 60, 16 * 60),
     TUESDAY_KEY: (1, 9 * 60, 16 * 60),
     THURSDAY_KEY: (3, 9 * 60, 16 * 60),
 }
@@ -63,11 +65,19 @@ def schedule_summary(settings: dict[str, Any]) -> str:
     times = settings.get(SCHEDULE_KEY, {})
     if settings.get("employment_type") == "fast_turnus":
         return f"Tirsdag kl. {times.get(TUESDAY_KEY, '--:--')} og torsdag kl. {times.get(THURSDAY_KEY, '--:--')}"
+    if settings.get("employment_type") == "timeloennet":
+        return f"Dagligt kl. {times.get(TIMELOENNET_KEY, '--:--')}"
     return f"Dagligt kl. {times.get(RAMME_KEY, '--:--')}"
 
 
 def _active_schedule(settings: dict[str, Any]) -> list[tuple[str, int, int, int]]:
-    keys = [TUESDAY_KEY, THURSDAY_KEY] if settings.get("employment_type") == "fast_turnus" else [RAMME_KEY]
+    employment_type = settings.get("employment_type")
+    if employment_type == "fast_turnus":
+        keys = [TUESDAY_KEY, THURSDAY_KEY]
+    elif employment_type == "timeloennet":
+        keys = [TIMELOENNET_KEY]
+    else:
+        keys = [RAMME_KEY]
     result = []
     times = settings.get(SCHEDULE_KEY, {})
     for key in keys:

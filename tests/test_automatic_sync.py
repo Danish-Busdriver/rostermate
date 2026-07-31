@@ -6,6 +6,7 @@ import app as app_module
 from automatic_sync import (
     LAST_ATTEMPT_KEY,
     RAMME_KEY,
+    TIMELOENNET_KEY,
     THURSDAY_KEY,
     TUESDAY_KEY,
     automatic_sync_slot,
@@ -28,12 +29,13 @@ class FixedRandom:
 def test_random_times_are_created_once_inside_the_required_windows():
     settings, changed = ensure_automatic_sync_times(
         {"employment_type": "ramme_ansat"},
-        FixedRandom([12 * 60 + 7, 9 * 60 + 11, 15 * 60 + 59]),
+        FixedRandom([12 * 60 + 7, 11 * 60 + 23, 9 * 60 + 11, 15 * 60 + 59]),
     )
 
     assert changed is True
     assert settings["automatic_sync_times"] == {
         RAMME_KEY: "12:07",
+        TIMELOENNET_KEY: "11:23",
         TUESDAY_KEY: "09:11",
         THURSDAY_KEY: "15:59",
     }
@@ -70,6 +72,21 @@ def test_turnus_sync_uses_tuesday_and_thursday_between_9_and_16():
     assert automatic_sync_slot(settings, datetime(2026, 7, 30, 14, 45)) == "2026-07-30:turnus_thursday"
     assert automatic_sync_slot(settings, datetime(2026, 7, 31, 14, 45)) is None
     assert schedule_summary(settings) == "Tirsdag kl. 10:15 og torsdag kl. 14:45"
+
+
+def test_timeloennet_sync_is_due_once_daily_between_9_and_16():
+    settings = {
+        "employment_type": "timeloennet",
+        "automatic_sync_times": {TIMELOENNET_KEY: "11:23"},
+    }
+    now = datetime(2026, 7, 31, 11, 23)
+    slot = automatic_sync_slot(settings, now)
+
+    assert slot == "2026-07-31:timeloennet_daily"
+    assert automatic_sync_slot({**settings, LAST_ATTEMPT_KEY: slot}, now) is None
+    assert automatic_sync_slot(settings, datetime(2026, 7, 31, 8, 59)) is None
+    assert automatic_sync_slot(settings, datetime(2026, 7, 31, 16, 0)) is None
+    assert schedule_summary(settings) == "Dagligt kl. 11:23"
 
 
 def test_next_automatic_sync_uses_the_profiles_stable_time():

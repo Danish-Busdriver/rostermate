@@ -67,7 +67,7 @@ EVENTS_STORE_PATH = OUTPUT_DIR / "events_store.json"
 CHANGES_PATH = OUTPUT_DIR / "changes.json"
 ICS_PATH = OUTPUT_DIR / "vagter.ics"
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.11.0"
+APP_VERSION = "1.12.0"
 SYNC_LOCKS: dict[str, threading.Lock] = {}
 SYNC_LOCKS_GUARD = threading.Lock()
 
@@ -320,7 +320,7 @@ def load_settings(driver_id: str) -> dict[str, Any]:
         days_ahead = 7
 
     employment_type = stored.get("employment_type", "ramme_ansat")
-    if employment_type not in ("ramme_ansat", "fast_turnus"):
+    if employment_type not in ("ramme_ansat", "fast_turnus", "timeloennet"):
         employment_type = "ramme_ansat"
 
     loaded = with_setup_defaults({
@@ -2578,7 +2578,11 @@ def index(driver_id: str) -> str:
         next_sync=calculate_next_sync(settings),
         employment_type=settings["employment_type"],
         employment_type_label="Ansættelsesform",
-        employment_type_display="Ramme ansat" if settings["employment_type"] == "ramme_ansat" else "Fast turnus",
+        employment_type_display={
+            "ramme_ansat": "Ramme ansat",
+            "fast_turnus": "Fast turnus",
+            "timeloennet": "Timelønnet",
+        }.get(settings["employment_type"], "Ramme ansat"),
         days_ahead=settings["days_ahead"],
         remove_old_shifts=settings["remove_old_shifts"],
         event_count=len(events),
@@ -3113,6 +3117,7 @@ def settings_page(driver_id: str) -> str:
                                     <select id="employment_type" name="employment_type">
                                         <option value="ramme_ansat" {% if settings.employment_type == 'ramme_ansat' %}selected{% endif %}>Ramme ansat (dagligt mellem kl. 12 og 14)</option>
                                         <option value="fast_turnus" {% if settings.employment_type == 'fast_turnus' %}selected{% endif %}>Fast turnus (tirsdag og torsdag mellem kl. 9 og 16)</option>
+                                        <option value="timeloennet" {% if settings.employment_type == 'timeloennet' %}selected{% endif %}>Timelønnet (dagligt mellem kl. 9 og 16)</option>
                                     </select>
                                     <div class="field-hint">Denne profil har faste, tilfældigt valgte tider: {{ automatic_schedule }}.</div>
                                 </div>
@@ -3166,7 +3171,7 @@ def settings_route(driver_id: str) -> tuple[Any, int]:
     settings = load_settings(safe_driver_id)
 
     employment_type = request.form.get("employment_type", settings.get("employment_type", "ramme_ansat"))
-    if employment_type not in ("ramme_ansat", "fast_turnus"):
+    if employment_type not in ("ramme_ansat", "fast_turnus", "timeloennet"):
         employment_type = "ramme_ansat"
 
     remove_old_shifts = request.form.get("remove_old_shifts") == "true"

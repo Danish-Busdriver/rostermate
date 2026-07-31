@@ -390,6 +390,7 @@ def test_settings_page_contains_installation_port(tmp_path, monkeypatch):
     assert b"Lokal server" in response.data
     assert b'name="app_port"' in response.data
     assert b"dagligt mellem kl. 12 og 14" in response.data
+    assert "Timelønnet (dagligt mellem kl. 9 og 16)".encode() in response.data
     assert "faste, tilfældigt valgte tider".encode() in response.data
     assert b"run_every_minutes" not in response.data
     assert b"Google Calendar" not in response.data

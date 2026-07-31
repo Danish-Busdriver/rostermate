@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-blue" alt="macOS">
   <img src="https://img.shields.io/badge/platform-Windows-0078D4" alt="Windows">
-  <img src="https://img.shields.io/badge/version-1.11.0-00A9CE" alt="Version 1.11.0">
+  <img src="https://img.shields.io/badge/version-1.12.0-00A9CE" alt="Version 1.12.0">
   <img src="https://img.shields.io/badge/license-MIT-red" alt="MIT license">
 </p>
 
@@ -47,7 +47,7 @@ Login- og kalenderdata bliver på din egen computer. En tom eller afbrudt hentni
 3. Vælg hvor mange dage frem der skal synkroniseres.
 4. Tilføj RosterMates kalenderlink i din foretrukne kalenderapp.
 
-Herefter kan du altid synkronisere manuelt fra dashboardet. Automatisk sync fordeles, så rammeansatte synkroniserer én gang dagligt mellem kl. 12 og 14, mens fast turnus synkroniserer tirsdag og torsdag mellem kl. 9 og 16. Hver profil får egne faste, tilfældigt valgte tider inden for vinduerne. RosterMate forsøger først automatisk login og viser kun loginvinduet, hvis SelfService ikke længere accepterer de gemte oplysninger.
+Herefter kan du altid synkronisere manuelt fra dashboardet. Automatisk sync fordeles, så rammeansatte synkroniserer én gang dagligt mellem kl. 12 og 14, timelønnede én gang dagligt mellem kl. 9 og 16, mens fast turnus synkroniserer tirsdag og torsdag mellem kl. 9 og 16. Hver profil får egne faste, tilfældigt valgte tider inden for vinduerne. RosterMate forsøger først automatisk login og viser kun loginvinduet, hvis SelfService ikke længere accepterer de gemte oplysninger.
 
 ## Se RosterMate
 
@@ -98,8 +98,8 @@ Herefter kan du altid synkronisere manuelt fra dashboardet. Automatisk sync ford
 
 ## Hent RosterMate
 
-- [RosterMate 1.11.0 til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.11.0-macOS.pkg)
-- [RosterMate 1.11.0 til Windows](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.11.0-Windows-Setup.exe)
+- [RosterMate 1.12.0 til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.12.0-macOS.pkg)
+- [RosterMate 1.12.0 til Windows](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.12.0-Windows-Setup.exe)
 
 Teknisk installation, fejlfinding og afinstallation findes i de separate vejledninger:
 
