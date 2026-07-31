@@ -11,7 +11,7 @@ Denne guide indeholder installation, opdatering og teknisk drift af RosterMate p
 
 ## Anbefalet installation
 
-Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.12.0-macOS.pkg`, og dobbeltklik på filen. Du behøver ikke åbne Terminal.
+Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.13.0-macOS.pkg`, og dobbeltklik på filen. Du behøver ikke åbne Terminal.
 
 Installationsprogrammet placerer RosterMate i **Programmer**, kontrollerer en kompatibel officiel Python-version, opretter appens eget isolerede miljø og installerer alle Python-afhængigheder samt Chromium-browseren til SelfService. macOS beder om administratorgodkendelse. RosterMate bruger port 8080, hvis den er ledig; ellers vælges automatisk den første ledige port frem til 8179. Efter installationen starter appen og åbner opsætningsguiden automatisk på den valgte port. Første installation kan tage et par minutter.
 
@@ -73,7 +73,9 @@ RosterMate fordeler automatiske SelfService-kald mellem installationerne. Hver c
 - Timelønnet: én gang dagligt mellem kl. 09:00 og 16:00.
 - Fast turnus: tirsdag og torsdag mellem kl. 09:00 og 16:00.
 
-De præcise tider vises under **Indstillinger → Synkronisering**, og næste kørsel vises på dashboardet. Et planlagt tidspunkt forsøges højst én gang, også hvis SelfService er utilgængelig. Manuel **Synk nu** er altid tilgængelig.
+De præcise tider vises under **Indstillinger → Synkronisering**, hvor auto-sync kan slås til eller fra separat for hver profil. Dashboardet viser næste kørsel, seneste automatiske forsøg og en fejlbesked med **Prøv igen nu**, hvis et forsøg fejler. Et planlagt tidspunkt forsøges højst én gang, også hvis SelfService er utilgængelig. Manuel **Synk nu** er altid tilgængelig.
+
+Indstillingen **Vis en systembesked, når vagter ændres** bruger macOS' egne notifikationer. Den første hentning giver ingen besked; notifikationen vises kun, når en senere synkronisering faktisk tilføjer, ændrer eller fjerner vagter.
 
 RosterMate skal køre på det valgte tidspunkt. Aktivér **Start automatisk med macOS** for at lade appen starte ved login; en slukket eller sovende Mac vækkes ikke af RosterMate.
 

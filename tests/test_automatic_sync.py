@@ -133,7 +133,9 @@ def test_automatic_cycle_runs_a_profile_only_once_per_slot(tmp_path, monkeypatch
     assert first[0]["status"] == "synced"
     assert second == []
     assert len(calls) == 1
-    assert app_module.load_settings("1234")[LAST_ATTEMPT_KEY] == "2026-07-31:ramme_daily"
+    saved = app_module.load_settings("1234")
+    assert saved[LAST_ATTEMPT_KEY] == "2026-07-31:ramme_daily"
+    assert saved["last_automatic_sync_status"] == "success"
 
 
 def test_failed_automatic_cycle_is_not_retried_inside_the_same_window(tmp_path, monkeypatch):
@@ -170,3 +172,42 @@ def test_failed_automatic_cycle_is_not_retried_inside_the_same_window(tmp_path, 
     assert second == []
     assert calls == [1]
     assert "Automatisk synkronisering fejlede" in app_module.load_history(paths["history_path"])[-1]["summary"]
+    saved = app_module.load_settings("9876")
+    assert saved["last_automatic_sync_status"] == "error"
+    assert "SelfService" in saved["last_automatic_sync_message"]
+
+
+def test_automatic_cycle_skips_a_disabled_profile(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
+    monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
+    paths = app_module.get_driver_paths("2468")
+    app_module.save_driver_settings("2468", {
+        "wizard_completed": True,
+        "automatic_sync_enabled": False,
+        "employment_type": "ramme_ansat",
+        "automatic_sync_times": {RAMME_KEY: "12:30"},
+    })
+    paths["selfservice_storage_state_path"].write_text('{"cookies":[]}', encoding="utf-8")
+    monkeypatch.setattr(app_module, "run_initial_sync", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError()))
+
+    assert app_module.run_automatic_sync_cycle(datetime(2026, 7, 31, 12, 31)) == []
+
+
+def test_dashboard_status_exposes_success_error_and_disabled_states():
+    success = app_module.automatic_sync_dashboard_status({
+        "last_automatic_sync_status": "success",
+        "last_automatic_sync_attempt_at": "2026-07-31T12:30:00",
+        "last_automatic_sync_event_count": 12,
+        "last_automatic_sync_change_count": 2,
+    })
+    error = app_module.automatic_sync_dashboard_status({
+        "last_automatic_sync_status": "error",
+        "last_automatic_sync_message": "Login afvist",
+    })
+    disabled = app_module.automatic_sync_dashboard_status({"automatic_sync_enabled": False})
+
+    assert success["label"] == "Auto-sync gennemført"
+    assert "12 vagter · 2 ændringer" in success["detail"]
+    assert error["error"] == "Login afvist"
+    assert disabled["label"] == "Auto-sync slået fra"

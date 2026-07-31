@@ -10,7 +10,7 @@ Windows-udgaven bruger samme dashboard, SelfService-synkronisering, profiler, hi
 
 ## Anbefalet installation
 
-1. Download `RosterMate-1.12.0-Windows-Setup.exe` fra den seneste GitHub Release.
+1. Download `RosterMate-1.13.0-Windows-Setup.exe` fra den seneste GitHub Release.
 2. Dobbeltklik på installationsfilen.
 3. Vælg eventuelt en skrivebordsgenvej og gennemfør guiden.
 4. Lad installationsprogrammet hente Python, RosterMates afhængigheder og Chromium.
@@ -104,7 +104,9 @@ RosterMate fordeler automatiske SelfService-kald mellem installationerne. Hver c
 - Timelønnet: én gang dagligt mellem kl. 09:00 og 16:00.
 - Fast turnus: tirsdag og torsdag mellem kl. 09:00 og 16:00.
 
-De præcise tider vises under **Indstillinger → Synkronisering**, og næste kørsel vises på dashboardet. Et planlagt tidspunkt forsøges højst én gang, også hvis SelfService er utilgængelig. Manuel **Synk nu** er altid tilgængelig.
+De præcise tider vises under **Indstillinger → Synkronisering**, hvor auto-sync kan slås til eller fra separat for hver profil. Dashboardet viser næste kørsel, seneste automatiske forsøg og en fejlbesked med **Prøv igen nu**, hvis et forsøg fejler. Et planlagt tidspunkt forsøges højst én gang, også hvis SelfService er utilgængelig. Manuel **Synk nu** er altid tilgængelig.
+
+Indstillingen **Vis en systembesked, når vagter ændres** bruger Windows' egne systembakke-beskeder. Den første hentning giver ingen besked; notifikationen vises kun, når en senere synkronisering faktisk tilføjer, ændrer eller fjerner vagter.
 
 RosterMate skal køre på det valgte tidspunkt. Aktivér **Start automatisk med Windows** for at lade appen starte ved login; en slukket eller sovende pc vækkes ikke af RosterMate.
 

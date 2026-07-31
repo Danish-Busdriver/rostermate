@@ -12,6 +12,7 @@ def with_setup_defaults(settings: dict[str, Any]) -> dict[str, Any]:
         "launch_at_login": settings.get("launch_at_login", False),
         "show_menu_bar_icon": settings.get("show_menu_bar_icon", True),
         "notify_on_changes": settings.get("notify_on_changes", True),
+        "automatic_sync_enabled": settings.get("automatic_sync_enabled", True),
         "wizard_completed": settings.get("wizard_completed", False),
         "selfservice_session_verified": settings.get("selfservice_session_verified", False),
     }

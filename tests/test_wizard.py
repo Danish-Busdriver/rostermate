@@ -392,6 +392,9 @@ def test_settings_page_contains_installation_port(tmp_path, monkeypatch):
     assert b"dagligt mellem kl. 12 og 14" in response.data
     assert "Timelønnet (dagligt mellem kl. 9 og 16)".encode() in response.data
     assert "faste, tilfældigt valgte tider".encode() in response.data
+    assert b'name="automatic_sync_enabled"' in response.data
+    assert b'name="notify_on_changes"' in response.data
+    assert "Vis en systembesked, når vagter ændres".encode() in response.data
     assert b"run_every_minutes" not in response.data
     assert b"Google Calendar" not in response.data
 
@@ -404,12 +407,18 @@ def test_settings_can_change_installation_port(tmp_path, monkeypatch):
     app_module.app.config["TESTING"] = True
 
     with app_module.app.test_client() as client:
-        response = client.post("/1234/settings", data={"app_port": "8092"})
+        response = client.post("/1234/settings", data={
+            "app_port": "8092",
+            "automatic_sync_enabled": "true",
+            "notify_on_changes": "true",
+        })
 
     payload = response.get_json()
     assert response.status_code == 200
     assert payload["restart_required"] is True
     assert payload["next_url"] == "http://localhost:8092/"
+    assert payload["automatic_sync_enabled"] is True
+    assert payload["notify_on_changes"] is True
     assert json.loads((tmp_path / "data" / "app-config.json").read_text(encoding="utf-8")) == {"port": 8092}
 
 

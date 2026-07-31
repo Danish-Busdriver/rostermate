@@ -29,6 +29,7 @@ from dashboard import should_show_first_run, should_show_welcome_back
 from credentials import get_password, set_password
 from launch_agent import sync_launch_agent_preference
 from login import launch_authenticated_context, login_manager, read_stable_page_content, save_session_storage
+from notifications import send_change_notification
 from port_config import configured_port, port_is_available, save_port, valid_port
 from release_update import check_for_release_update
 from session_store import SelfServiceSessionStore
@@ -67,7 +68,7 @@ EVENTS_STORE_PATH = OUTPUT_DIR / "events_store.json"
 CHANGES_PATH = OUTPUT_DIR / "changes.json"
 ICS_PATH = OUTPUT_DIR / "vagter.ics"
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.12.0"
+APP_VERSION = "1.13.0"
 SYNC_LOCKS: dict[str, threading.Lock] = {}
 SYNC_LOCKS_GUARD = threading.Lock()
 
@@ -372,6 +373,8 @@ def driver_urls(driver_id: str) -> dict[str, str]:
 
 def calculate_next_sync(settings: dict[str, Any], now: datetime | None = None) -> str:
     """Format the next stable per-profile automatic synchronization time."""
+    if not settings.get("automatic_sync_enabled", True):
+        return "Deaktiveret"
     current = now or datetime.now()
     weekday_names = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag", "Søndag"]
     next_sync = next_automatic_sync(settings, current)
@@ -387,6 +390,40 @@ def format_timestamp(value: str | None) -> str:
         return datetime.fromisoformat(value).strftime("%d.%m.%Y kl. %H:%M")
     except ValueError:
         return value
+
+
+def compact_error_message(error: Exception | str, limit: int = 240) -> str:
+    message = str(error).strip().splitlines()[0] if str(error).strip() else "Ukendt fejl"
+    return message if len(message) <= limit else message[: limit - 1].rstrip() + "…"
+
+
+def automatic_sync_dashboard_status(settings: dict[str, Any]) -> dict[str, str]:
+    if not settings.get("automatic_sync_enabled", True):
+        return {"label": "Auto-sync slået fra", "detail": "Manuel sync er stadig tilgængelig", "error": ""}
+    status = str(settings.get("last_automatic_sync_status") or "never")
+    attempted = format_timestamp(settings.get("last_automatic_sync_attempt_at"))
+    message = str(settings.get("last_automatic_sync_message") or "")
+    if status == "success":
+        event_count = int(settings.get("last_automatic_sync_event_count") or 0)
+        change_count = int(settings.get("last_automatic_sync_change_count") or 0)
+        detail = f"{attempted} · {event_count} vagter · {change_count} ændringer"
+        return {"label": "Auto-sync gennemført", "detail": detail, "error": ""}
+    if status == "error":
+        return {"label": "Auto-sync fejlede", "detail": attempted, "error": message or "Ukendt fejl"}
+    if status == "running":
+        return {"label": "Auto-sync kører", "detail": attempted, "error": ""}
+    return {"label": "Auto-sync klar", "detail": "Intet automatisk forsøg endnu", "error": ""}
+
+
+def notify_if_schedule_changed(
+    settings: dict[str, Any],
+    changes: list[dict[str, Any]],
+    *,
+    had_existing_events: bool,
+) -> bool:
+    if not had_existing_events or not settings.get("notify_on_changes", True):
+        return False
+    return send_change_notification(changes)
 
 
 def extract_shift_name(title: str) -> str:
@@ -1239,6 +1276,7 @@ def run_interactive_initial_sync(
     paths: dict[str, Path],
     history_prefix: str = "First run sync",
 ) -> dict[str, Any]:
+    had_existing_events = bool(load_json(paths["events_store_path"], []))
     sync_lock = driver_sync_lock(driver_id)
     if not sync_lock.acquire(blocking=False):
         raise RuntimeError("En synkronisering kører allerede. Prøv igen om et øjeblik.")
@@ -1259,6 +1297,11 @@ def run_interactive_initial_sync(
             load_history,
             save_history,
             history_prefix,
+        )
+        notify_if_schedule_changed(
+            settings,
+            result["changes"],
+            had_existing_events=had_existing_events,
         )
         save_driver_settings(driver_id, {**settings, "selfservice_session_verified": True})
     finally:
@@ -1282,6 +1325,8 @@ def run_automatic_sync_cycle(now: datetime | None = None) -> list[dict[str, str]
         session_store = SelfServiceSessionStore.from_paths(driver_id, paths)
         if not settings.get("wizard_completed"):
             continue
+        if not settings.get("automatic_sync_enabled", True):
+            continue
         if not session_store.has_saved_session() and not (settings.get("user") and settings.get("pass")):
             continue
         slot = automatic_sync_slot(settings, current)
@@ -1295,7 +1340,14 @@ def run_automatic_sync_cycle(now: datetime | None = None) -> list[dict[str, str]
             slot = automatic_sync_slot(settings, current)
             if slot is None:
                 continue
-            attempted_settings = {**settings, LAST_ATTEMPT_KEY: slot}
+            had_existing_events = bool(load_json(paths["events_store_path"], []))
+            attempted_settings = {
+                **settings,
+                LAST_ATTEMPT_KEY: slot,
+                "last_automatic_sync_attempt_at": current.isoformat(),
+                "last_automatic_sync_status": "running",
+                "last_automatic_sync_message": "Synkronisering i gang",
+            }
             save_driver_settings(driver_id, attempted_settings)
             try:
                 result = run_initial_sync(
@@ -1311,16 +1363,39 @@ def run_automatic_sync_cycle(now: datetime | None = None) -> list[dict[str, str]
                     "Automatisk sync",
                 )
             except Exception as exc:
+                error_message = compact_error_message(exc)
                 history = load_history(paths["history_path"])
                 history.append({
                     "timestamp": current.isoformat(),
-                    "summary": f"Automatisk synkronisering fejlede: {exc}",
+                    "summary": f"Automatisk synkronisering fejlede: {error_message}",
                     "changes": [],
                 })
                 save_history(history, paths["history_path"])
+                save_driver_settings(driver_id, {
+                    **attempted_settings,
+                    "last_automatic_sync_status": "error",
+                    "last_automatic_sync_message": error_message,
+                    "last_automatic_sync_event_count": 0,
+                    "last_automatic_sync_change_count": 0,
+                })
                 outcomes.append({"driver_id": driver_id, "status": "error", "slot": slot})
             else:
-                save_driver_settings(driver_id, {**attempted_settings, "selfservice_session_verified": True})
+                event_count = int(result.get("count") or 0)
+                change_count = len(result.get("changes") or [])
+                completed_settings = {
+                    **attempted_settings,
+                    "selfservice_session_verified": True,
+                    "last_automatic_sync_status": "success",
+                    "last_automatic_sync_message": str(result.get("message", "")),
+                    "last_automatic_sync_event_count": event_count,
+                    "last_automatic_sync_change_count": change_count,
+                }
+                save_driver_settings(driver_id, completed_settings)
+                notify_if_schedule_changed(
+                    completed_settings,
+                    result.get("changes") or [],
+                    had_existing_events=had_existing_events,
+                )
                 outcomes.append({
                     "driver_id": driver_id,
                     "status": "synced",
@@ -1742,6 +1817,7 @@ def index(driver_id: str) -> str:
     show_profile_switcher = len(list_driver_ids()) > 1
     app_port = application_port()
     update_status = check_for_release_update(STORAGE_ROOT / "release_update.json", APP_VERSION)
+    automatic_status = automatic_sync_dashboard_status(settings)
 
     return render_template_string(
         """
@@ -1884,6 +1960,17 @@ def index(driver_id: str) -> str:
                     display: block;
                     margin-bottom: 0.25rem;
                 }
+                .sync-error-banner {
+                    margin-top: 1rem;
+                    padding: 0.95rem 1rem;
+                    border-radius: 18px;
+                    background: rgba(252, 233, 231, 0.96);
+                    border: 1px solid rgba(180, 35, 24, 0.2);
+                    color: #7a271a;
+                }
+                .sync-error-banner strong { display: block; margin-bottom: 0.25rem; }
+                .sync-error-banner form { margin-top: 0.7rem; }
+                .sync-error-banner button { width: auto; margin: 0; }
                 .hero {
                     background:
                         linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)),
@@ -2396,7 +2483,22 @@ def index(driver_id: str) -> str:
                                     <strong>Næste sync</strong>
                                     <span>{{ next_sync }}</span>
                                 </div>
+                                <div class="hero-chip">
+                                    <strong>Automatisk sync</strong>
+                                    <span>{{ automatic_status.label }}</span>
+                                    <small>{{ automatic_status.detail }}</small>
+                                </div>
                             </div>
+                            {% if automatic_status.error %}
+                            <div class="sync-error-banner" role="alert">
+                                <strong>Seneste automatiske sync fejlede</strong>
+                                <span>{{ automatic_status.error }}</span>
+                                <form onsubmit="handleFormSubmit(event, '{{ urls.sync_url }}')">
+                                    <input type="hidden" name="days_ahead" value="{{ days_ahead }}">
+                                    <button type="submit">Prøv igen nu</button>
+                                </form>
+                            </div>
+                            {% endif %}
                             {% if needs_selfservice_setup %}
                             <div class="setup-banner">
                                 <strong>Første opsætning mangler</strong>
@@ -2599,6 +2701,7 @@ def index(driver_id: str) -> str:
         app_port=app_port,
         needs_selfservice_setup=needs_selfservice_setup,
         update_status=update_status,
+        automatic_status=automatic_status,
         platform_labels=ui_platform_labels(),
     )
 
@@ -2658,6 +2761,7 @@ def sync_route(driver_id: str) -> tuple[Any, int]:
             headless=True,
         )
         if saved_events:
+            had_existing_events = bool(load_json(paths["events_store_path"], []))
             result = run_initial_sync(
                 safe_driver_id,
                 updated_settings,
@@ -2673,6 +2777,11 @@ def sync_route(driver_id: str) -> tuple[Any, int]:
             save_driver_settings(
                 safe_driver_id,
                 {**updated_settings, "selfservice_session_verified": True},
+            )
+            notify_if_schedule_changed(
+                updated_settings,
+                result["changes"],
+                had_existing_events=had_existing_events,
             )
             return jsonify({
                 "status": "ok",
@@ -3121,6 +3230,8 @@ def settings_page(driver_id: str) -> str:
                                     </select>
                                     <div class="field-hint">Denne profil har faste, tilfældigt valgte tider: {{ automatic_schedule }}.</div>
                                 </div>
+                                <label class="row"><input type="checkbox" name="automatic_sync_enabled" value="true" {% if settings.automatic_sync_enabled %}checked{% endif %}> Kør automatisk synkronisering for denne profil</label>
+                                <label class="row"><input type="checkbox" name="notify_on_changes" value="true" {% if settings.notify_on_changes %}checked{% endif %}> Vis en systembesked, når vagter ændres</label>
                                 <div class="field">
                                     <label for="days_ahead">Dage frem</label>
                                     <input id="days_ahead" name="days_ahead" type="number" min="1" max="365" value="{{ settings.days_ahead }}">
@@ -3175,6 +3286,8 @@ def settings_route(driver_id: str) -> tuple[Any, int]:
         employment_type = "ramme_ansat"
 
     remove_old_shifts = request.form.get("remove_old_shifts") == "true"
+    automatic_sync_enabled = request.form.get("automatic_sync_enabled") == "true"
+    notify_on_changes = request.form.get("notify_on_changes") == "true"
     current_port = application_port()
     requested_port = valid_port(request.form.get("app_port", current_port))
     if requested_port is None:
@@ -3189,6 +3302,8 @@ def settings_route(driver_id: str) -> tuple[Any, int]:
         "days_ahead": int(request.form.get("days_ahead", settings.get("days_ahead", 7))),
         "remove_old_shifts": remove_old_shifts,
         "employment_type": employment_type,
+        "automatic_sync_enabled": automatic_sync_enabled,
+        "notify_on_changes": notify_on_changes,
         "calendar_public_base_url": request.form.get(
             "calendar_public_base_url", settings.get("calendar_public_base_url", "")
         ).strip().rstrip("/"),
@@ -3212,6 +3327,8 @@ def settings_route(driver_id: str) -> tuple[Any, int]:
         "status": "ok",
         "message": message,
         "employment_type": employment_type,
+        "automatic_sync_enabled": automatic_sync_enabled,
+        "notify_on_changes": notify_on_changes,
         "port": requested_port,
         "restart_required": port_changed,
         "next_url": f"http://localhost:{requested_port}/",

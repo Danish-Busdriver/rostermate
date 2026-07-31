@@ -130,6 +130,15 @@ def test_windows_distribution_files_are_present():
     assert "Seneste serverfejl" in windows_launcher
 
 
+def test_change_notifications_have_both_platform_adapters():
+    source = (Path(__file__).resolve().parents[1] / "notifications.py").read_text(encoding="utf-8")
+
+    assert 'active_platform == "darwin"' in source
+    assert '"osascript"' in source
+    assert 'active_platform == "win32"' in source
+    assert "System.Windows.Forms.NotifyIcon" in source
+
+
 def test_windows_exe_installer_definition_is_present():
     project_root = Path(__file__).resolve().parents[1]
     installer = (project_root / "installer" / "windows" / "RosterMate.iss").read_text(encoding="utf-8")
