@@ -215,3 +215,14 @@ def test_dashboard_contains_daily_platform_release_notice():
     assert "CHECK_INTERVAL_SECONDS = 24 * 60 * 60" in update_source
     assert 'expected_suffix = ".pkg" if platform_name == "darwin" else "-Windows-Setup.exe"' in update_source
     assert "certifi.where()" in update_source
+
+
+def test_shared_automatic_scheduler_starts_through_both_platform_launchers():
+    project_root = Path(__file__).resolve().parents[1]
+    app_source = (project_root / "app.py").read_text(encoding="utf-8")
+    macos_launcher = (project_root / "run.command").read_text(encoding="utf-8")
+    windows_launcher = (project_root / "windows_launcher.py").read_text(encoding="utf-8")
+
+    assert "start_automatic_sync_worker()" in app_source
+    assert "python3 app.py" in macos_launcher
+    assert '[sys.executable, "-u", "app.py"]' in windows_launcher

@@ -795,7 +795,7 @@ def test_saved_gui_preferences_override_env_defaults(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
     monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
     (tmp_path / ".env").write_text(
-        "DAYS_AHEAD=7\nRUN_EVERY_MINUTES=60\nREMOVE_OLD_SHIFTS=false\n",
+        "DAYS_AHEAD=7\nREMOVE_OLD_SHIFTS=false\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(app_module, "get_password", lambda _driver_id: "")
@@ -803,7 +803,6 @@ def test_saved_gui_preferences_override_env_defaults(tmp_path, monkeypatch):
         "1234",
         {
             "days_ahead": 21,
-            "run_every_minutes": 180,
             "remove_old_shifts": True,
         },
     )
@@ -811,7 +810,6 @@ def test_saved_gui_preferences_override_env_defaults(tmp_path, monkeypatch):
     settings = app_module.load_settings("1234")
 
     assert settings["days_ahead"] == 21
-    assert settings["run_every_minutes"] == 180
     assert settings["remove_old_shifts"] is True
 
 

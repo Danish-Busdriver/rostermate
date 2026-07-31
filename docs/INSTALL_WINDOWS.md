@@ -10,7 +10,7 @@ Windows-udgaven bruger samme dashboard, SelfService-synkronisering, profiler, hi
 
 ## Anbefalet installation
 
-1. Download `RosterMate-1.10.0-Windows-Setup.exe` fra den seneste GitHub Release.
+1. Download `RosterMate-1.11.0-Windows-Setup.exe` fra den seneste GitHub Release.
 2. Dobbeltklik på installationsfilen.
 3. Vælg eventuelt en skrivebordsgenvej og gennemfør guiden.
 4. Lad installationsprogrammet hente Python, RosterMates afhængigheder og Chromium.
@@ -95,6 +95,17 @@ RosterMate-<chaufførnummer>
 ```
 
 Opgaven starter `run-windows.ps1` efter brugerlogin. Deaktiveres indstillingen, fjernes opgaven igen.
+
+## Automatisk synkronisering
+
+RosterMate fordeler automatiske SelfService-kald mellem installationerne. Hver chaufførprofil får ved oprettelsen faste, tilfældigt valgte tider, som gemmes og genbruges efter genstart:
+
+- Rammeansat: én gang dagligt mellem kl. 12:00 og 14:00.
+- Fast turnus: tirsdag og torsdag mellem kl. 09:00 og 16:00.
+
+De præcise tider vises under **Indstillinger → Synkronisering**, og næste kørsel vises på dashboardet. Et planlagt tidspunkt forsøges højst én gang, også hvis SelfService er utilgængelig. Manuel **Synk nu** er altid tilgængelig.
+
+RosterMate skal køre på det valgte tidspunkt. Aktivér **Start automatisk med Windows** for at lade appen starte ved login; en slukket eller sovende pc vækkes ikke af RosterMate.
 
 ## Lokale data
 

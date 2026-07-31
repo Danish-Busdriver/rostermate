@@ -9,7 +9,7 @@
     <key>CFBundleIdentifier</key>
     <string>io.github.danish-busdriver.rostermate</string>
     <key>CFBundleVersion</key>
-	<string>1.10.0</string>
+	<string>1.11.0</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>

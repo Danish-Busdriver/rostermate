@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-blue" alt="macOS">
   <img src="https://img.shields.io/badge/platform-Windows-0078D4" alt="Windows">
-  <img src="https://img.shields.io/badge/version-1.10.0-00A9CE" alt="Version 1.10.0">
+  <img src="https://img.shields.io/badge/version-1.11.0-00A9CE" alt="Version 1.11.0">
   <img src="https://img.shields.io/badge/license-MIT-red" alt="MIT license">
 </p>
 
@@ -24,6 +24,7 @@ Vælg selv, hvor mange dage der skal hentes. RosterMate følger perioden på tv�
 ## Det får du
 
 - Automatisk hentning af vagter fra Tide SelfService
+- Belastningsspredt automatisk sync på et fast, tilfældigt tidspunkt for hver profil
 - Skjult genlogin med adgangskoden sikkert gemt i macOS-nøgleringen eller Windows Credential Manager
 - Synligt loginvindue som reserve, hvis SelfService kræver ny godkendelse
 - Synkronisering på tværs af kalendermåneder
@@ -46,7 +47,7 @@ Login- og kalenderdata bliver på din egen computer. En tom eller afbrudt hentni
 3. Vælg hvor mange dage frem der skal synkroniseres.
 4. Tilføj RosterMates kalenderlink i din foretrukne kalenderapp.
 
-Herefter kan du synkronisere fra dashboardet. RosterMate forsøger først automatisk login og viser kun loginvinduet, hvis SelfService ikke længere accepterer de gemte oplysninger.
+Herefter kan du altid synkronisere manuelt fra dashboardet. Automatisk sync fordeles, så rammeansatte synkroniserer én gang dagligt mellem kl. 12 og 14, mens fast turnus synkroniserer tirsdag og torsdag mellem kl. 9 og 16. Hver profil får egne faste, tilfældigt valgte tider inden for vinduerne. RosterMate forsøger først automatisk login og viser kun loginvinduet, hvis SelfService ikke længere accepterer de gemte oplysninger.
 
 ## Se RosterMate
 
@@ -72,6 +73,7 @@ Herefter kan du synkronisere fra dashboardet. RosterMate forsøger først automa
 
 - [x] macOS- og Windows-app med samme GUI
 - [x] Guidet og automatisk SelfService-login
+- [x] Tilfældige automatiske sync-tider, der fordeler belastningen
 - [x] Synkronisering på tværs af måneder
 - [x] Dashboard, historik og ændringsregistrering
 - [x] ICS-eksport og kalenderdeling
@@ -96,8 +98,8 @@ Herefter kan du synkronisere fra dashboardet. RosterMate forsøger først automa
 
 ## Hent RosterMate
 
-- [RosterMate 1.10.0 til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.10.0-macOS.pkg)
-- [RosterMate 1.10.0 til Windows](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.10.0-Windows-Setup.exe)
+- [RosterMate 1.11.0 til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.11.0-macOS.pkg)
+- [RosterMate 1.11.0 til Windows](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.11.0-Windows-Setup.exe)
 
 Teknisk installation, fejlfinding og afinstallation findes i de separate vejledninger:
 

@@ -18,6 +18,13 @@ from zoneinfo import ZoneInfo
 
 from flask import Flask, abort, jsonify, redirect, render_template_string, request, send_file, session, url_for
 
+from automatic_sync import (
+    LAST_ATTEMPT_KEY,
+    automatic_sync_slot,
+    ensure_automatic_sync_times,
+    next_automatic_sync,
+    schedule_summary,
+)
 from dashboard import should_show_first_run, should_show_welcome_back
 from credentials import get_password, set_password
 from launch_agent import sync_launch_agent_preference
@@ -60,7 +67,7 @@ EVENTS_STORE_PATH = OUTPUT_DIR / "events_store.json"
 CHANGES_PATH = OUTPUT_DIR / "changes.json"
 ICS_PATH = OUTPUT_DIR / "vagter.ics"
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.10.0"
+APP_VERSION = "1.11.0"
 SYNC_LOCKS: dict[str, threading.Lock] = {}
 SYNC_LOCKS_GUARD = threading.Lock()
 
@@ -312,27 +319,27 @@ def load_settings(driver_id: str) -> dict[str, Any]:
     except (TypeError, ValueError):
         days_ahead = 7
 
-    try:
-        run_every_minutes = int(stored.get("run_every_minutes", env_values.get("RUN_EVERY_MINUTES", 60)))
-    except (TypeError, ValueError):
-        run_every_minutes = 60
-
     employment_type = stored.get("employment_type", "ramme_ansat")
     if employment_type not in ("ramme_ansat", "fast_turnus"):
         employment_type = "ramme_ansat"
 
-    return with_setup_defaults({
+    loaded = with_setup_defaults({
         **stored,
         "url": stored.get("url") or env_values.get("SELFSERVICE_URL", "https://selfservicedanmark.tidebus.dk"),
         "user": stored.get("user") or env_user,
         "pass": get_password(driver_id) or stored.get("pass", ""),
         "days_ahead": max(1, min(days_ahead, 365)),
-        "run_every_minutes": max(1, min(run_every_minutes, 10080)),
         "remove_old_shifts": _coerce_bool(
             stored.get("remove_old_shifts", env_values.get("REMOVE_OLD_SHIFTS", False))
         ),
         "employment_type": employment_type,
     })
+    loaded, schedule_changed = ensure_automatic_sync_times(loaded)
+    if schedule_changed:
+        persisted = dict(loaded)
+        persisted.pop("pass", None)
+        save_json(paths["settings_path"], persisted)
+    return loaded
 
 
 def save_driver_settings(driver_id: str, settings: dict[str, Any]) -> None:
@@ -363,55 +370,14 @@ def driver_urls(driver_id: str) -> dict[str, str]:
     }
 
 
-def calculate_next_sync(employment_type: str) -> str:
-    """Calculate next scheduled sync time based on employment type."""
-    now = datetime.now()
+def calculate_next_sync(settings: dict[str, Any], now: datetime | None = None) -> str:
+    """Format the next stable per-profile automatic synchronization time."""
+    current = now or datetime.now()
     weekday_names = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag", "Søndag"]
-
-    if employment_type == "fast_turnus":
-        # Fast turnus: sync on Tuesday and Friday at 14:00
-        current_weekday = now.weekday()  # Monday=0, Sunday=6
-        current_hour = now.hour
-
-        # Tuesday (1) and Friday (4)
-        sync_days = [1, 4]
-        sync_hour = 14
-
-        # Find next sync day
-        next_sync = None
-
-        # Check if today is a sync day and time hasn't passed
-        if current_weekday in sync_days and current_hour < sync_hour:
-            next_sync = now.replace(hour=sync_hour, minute=0, second=0, microsecond=0)
-        else:
-            # Find next sync day
-            days_ahead = 0
-            for _ in range(7):
-                check_day = (current_weekday + days_ahead) % 7
-                if check_day in sync_days:
-                    if days_ahead == 0 and current_hour >= sync_hour:
-                        days_ahead = 1
-                        continue
-                    next_sync_date = now + timedelta(days=days_ahead)
-                    next_sync = next_sync_date.replace(hour=sync_hour, minute=0, second=0, microsecond=0)
-                    break
-                days_ahead += 1
-
-        if next_sync and next_sync <= now:
-            # If calculated time is in the past, move to next cycle
-            next_sync = next_sync + timedelta(days=1)
-            while next_sync.weekday() not in sync_days:
-                next_sync = next_sync + timedelta(days=1)
-
-        if next_sync:
-            day_name = weekday_names[next_sync.weekday()]
-            return f"{day_name} kl. {next_sync.strftime('%H:%M')}"
-        return "Ukendt"
-    else:
-        # Ramme ansat: sync every hour
-        next_hour = now + timedelta(hours=1)
-        day_name = weekday_names[next_hour.weekday()]
-        return f"{day_name} kl. {next_hour.strftime('%H:%M')}"
+    next_sync = next_automatic_sync(settings, current)
+    if next_sync is None:
+        return "Afventer næste vindue"
+    return f"{weekday_names[next_sync.weekday()]} kl. {next_sync.strftime('%H:%M')}"
 
 
 def format_timestamp(value: str | None) -> str:
@@ -1304,6 +1270,94 @@ def run_interactive_initial_sync(
         "events": len(result["events"]),
         "message": result["message"],
     }
+
+
+def run_automatic_sync_cycle(now: datetime | None = None) -> list[dict[str, str]]:
+    """Run each due profile at most once in its current randomized time window."""
+    current = now or datetime.now()
+    outcomes: list[dict[str, str]] = []
+    for driver_id in list_driver_ids():
+        paths = get_driver_paths(driver_id)
+        settings = load_settings(driver_id)
+        session_store = SelfServiceSessionStore.from_paths(driver_id, paths)
+        if not settings.get("wizard_completed"):
+            continue
+        if not session_store.has_saved_session() and not (settings.get("user") and settings.get("pass")):
+            continue
+        slot = automatic_sync_slot(settings, current)
+        if slot is None:
+            continue
+        sync_lock = driver_sync_lock(driver_id)
+        if not sync_lock.acquire(blocking=False):
+            continue
+        try:
+            settings = load_settings(driver_id)
+            slot = automatic_sync_slot(settings, current)
+            if slot is None:
+                continue
+            attempted_settings = {**settings, LAST_ATTEMPT_KEY: slot}
+            save_driver_settings(driver_id, attempted_settings)
+            try:
+                result = run_initial_sync(
+                    driver_id,
+                    attempted_settings,
+                    paths,
+                    fetch_schedule_with_retry,
+                    sync_schedule,
+                    write_outputs,
+                    load_json,
+                    load_history,
+                    save_history,
+                    "Automatisk sync",
+                )
+            except Exception as exc:
+                history = load_history(paths["history_path"])
+                history.append({
+                    "timestamp": current.isoformat(),
+                    "summary": f"Automatisk synkronisering fejlede: {exc}",
+                    "changes": [],
+                })
+                save_history(history, paths["history_path"])
+                outcomes.append({"driver_id": driver_id, "status": "error", "slot": slot})
+            else:
+                save_driver_settings(driver_id, {**attempted_settings, "selfservice_session_verified": True})
+                outcomes.append({
+                    "driver_id": driver_id,
+                    "status": "synced",
+                    "slot": slot,
+                    "message": str(result.get("message", "")),
+                })
+        finally:
+            sync_lock.release()
+    return outcomes
+
+
+def automatic_sync_worker(stop_event: threading.Event, interval_seconds: int = 30) -> None:
+    while not stop_event.is_set():
+        try:
+            run_automatic_sync_cycle()
+        except Exception as exc:
+            print(f"[RosterMate automatic sync] {exc}", file=sys.stderr, flush=True)
+        stop_event.wait(interval_seconds)
+
+
+_AUTOMATIC_SYNC_THREAD: threading.Thread | None = None
+_AUTOMATIC_SYNC_STOP = threading.Event()
+
+
+def start_automatic_sync_worker() -> threading.Thread:
+    global _AUTOMATIC_SYNC_THREAD
+    if _AUTOMATIC_SYNC_THREAD is not None and _AUTOMATIC_SYNC_THREAD.is_alive():
+        return _AUTOMATIC_SYNC_THREAD
+    _AUTOMATIC_SYNC_STOP.clear()
+    _AUTOMATIC_SYNC_THREAD = threading.Thread(
+        target=automatic_sync_worker,
+        args=(_AUTOMATIC_SYNC_STOP,),
+        name="rostermate-automatic-sync",
+        daemon=True,
+    )
+    _AUTOMATIC_SYNC_THREAD.start()
+    return _AUTOMATIC_SYNC_THREAD
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -2521,7 +2575,7 @@ def index(driver_id: str) -> str:
         driver_id=safe_driver_id,
         status="Klar til sync",
         last_sync=last_sync,
-        next_sync=calculate_next_sync(settings["employment_type"]),
+        next_sync=calculate_next_sync(settings),
         employment_type=settings["employment_type"],
         employment_type_label="Ansættelsesform",
         employment_type_display="Ramme ansat" if settings["employment_type"] == "ramme_ansat" else "Fast turnus",
@@ -2586,35 +2640,44 @@ def sync_route(driver_id: str) -> tuple[Any, int]:
         "remove_old_shifts": request.form.get("remove_old_shifts") == "true",
     }
     save_driver_settings(safe_driver_id, updated_settings)
-    saved_events, saved_status = fetch_selfservice_schedule(
-        days_ahead,
-        safe_driver_id,
-        allow_credential_login=True,
-        headless=True,
-    )
-    if saved_events:
-        result = run_initial_sync(
-            safe_driver_id,
-            updated_settings,
-            paths,
-            lambda _days, _driver_id: (saved_events, saved_status),
-            sync_schedule,
-            write_outputs,
-            load_json,
-            load_history,
-            save_history,
-            "Synkronisering",
-        )
-        save_driver_settings(
-            safe_driver_id,
-            {**updated_settings, "selfservice_session_verified": True},
-        )
+    sync_lock = driver_sync_lock(safe_driver_id)
+    if not sync_lock.acquire(blocking=False):
         return jsonify({
-            "status": "ok",
-            "message": result["message"],
-            "events": result["events"],
-            "changes": result["changes"],
-        }), 200
+            "status": "error",
+            "message": "En synkronisering kører allerede. Prøv igen om et øjeblik.",
+        }), 409
+    try:
+        saved_events, saved_status = fetch_selfservice_schedule(
+            days_ahead,
+            safe_driver_id,
+            allow_credential_login=True,
+            headless=True,
+        )
+        if saved_events:
+            result = run_initial_sync(
+                safe_driver_id,
+                updated_settings,
+                paths,
+                lambda _days, _driver_id: (saved_events, saved_status),
+                sync_schedule,
+                write_outputs,
+                load_json,
+                load_history,
+                save_history,
+                "Synkronisering",
+            )
+            save_driver_settings(
+                safe_driver_id,
+                {**updated_settings, "selfservice_session_verified": True},
+            )
+            return jsonify({
+                "status": "ok",
+                "message": result["message"],
+                "events": result["events"],
+                "changes": result["changes"],
+            }), 200
+    finally:
+        sync_lock.release()
 
     session_store = SelfServiceSessionStore.from_paths(safe_driver_id, paths)
     flow = login_manager.start(
@@ -3048,17 +3111,14 @@ def settings_page(driver_id: str) -> str:
                                 <div class="field">
                                     <label for="employment_type">Arbejdstype</label>
                                     <select id="employment_type" name="employment_type">
-                                        <option value="ramme_ansat" {% if settings.employment_type == 'ramme_ansat' %}selected{% endif %}>Ramme ansat (sync hver time)</option>
-                                        <option value="fast_turnus" {% if settings.employment_type == 'fast_turnus' %}selected{% endif %}>Fast turnus (sync tir+fre kl. 14)</option>
+                                        <option value="ramme_ansat" {% if settings.employment_type == 'ramme_ansat' %}selected{% endif %}>Ramme ansat (dagligt mellem kl. 12 og 14)</option>
+                                        <option value="fast_turnus" {% if settings.employment_type == 'fast_turnus' %}selected{% endif %}>Fast turnus (tirsdag og torsdag mellem kl. 9 og 16)</option>
                                     </select>
+                                    <div class="field-hint">Denne profil har faste, tilfældigt valgte tider: {{ automatic_schedule }}.</div>
                                 </div>
                                 <div class="field">
                                     <label for="days_ahead">Dage frem</label>
                                     <input id="days_ahead" name="days_ahead" type="number" min="1" max="365" value="{{ settings.days_ahead }}">
-                                </div>
-                                <div class="field">
-                                    <label for="run_every_minutes">Kør hvert X minut</label>
-                                    <input id="run_every_minutes" name="run_every_minutes" type="number" min="1" max="10080" value="{{ settings.run_every_minutes }}">
                                 </div>
                                 <label class="row"><input type="checkbox" name="remove_old_shifts" value="true" {% if settings.remove_old_shifts %}checked{% endif %}> Fjern gamle vagter ved sync</label>
                                 <div class="field">
@@ -3096,6 +3156,7 @@ def settings_page(driver_id: str) -> str:
         has_selfservice_session=has_selfservice_session,
         show_profile_switcher=show_profile_switcher,
         app_port=app_port,
+        automatic_schedule=schedule_summary(settings),
     )
 
 
@@ -3121,7 +3182,6 @@ def settings_route(driver_id: str) -> tuple[Any, int]:
         "user": request.form.get("user", settings.get("user", "")),
         "pass": request.form.get("pass", settings.get("pass", "")),
         "days_ahead": int(request.form.get("days_ahead", settings.get("days_ahead", 7))),
-        "run_every_minutes": int(request.form.get("run_every_minutes", settings.get("run_every_minutes", 60))),
         "remove_old_shifts": remove_old_shifts,
         "employment_type": employment_type,
         "calendar_public_base_url": request.form.get(
@@ -3394,4 +3454,5 @@ def health() -> tuple[Any, int]:
 
 
 if __name__ == "__main__":
+    start_automatic_sync_worker()
     app.run(host=os.environ.get("ROSTERMATE_HOST", "0.0.0.0"), port=application_port(), debug=False, use_reloader=False)
