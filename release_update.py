@@ -85,7 +85,12 @@ def check_for_release_update(
     active_platform = platform_name or sys.platform
     cached = _load_cache(cache_path)
     checked_at = float(cached.get("checked_at") or 0)
-    if checked_at and current_time - checked_at < CHECK_INTERVAL_SECONDS:
+    cached_current_version = str(cached.get("current_version") or "")
+    if (
+        checked_at
+        and cached_current_version == current_version
+        and current_time - checked_at < CHECK_INTERVAL_SECONDS
+    ):
         cached["current_version"] = current_version
         cached["available"] = _is_newer(str(cached.get("latest_version") or ""), current_version)
         _save_cache(cache_path, cached)

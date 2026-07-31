@@ -220,10 +220,15 @@ def test_dashboard_contains_daily_platform_release_notice():
 
     assert 'STORAGE_ROOT / "release_update.json"' in app_source
     assert "update_status.available" in app_source
-    assert "Hent opdatering" in app_source
+    assert "Hent og installér" in app_source
+    assert '"install_update_url"' in app_source
     assert "CHECK_INTERVAL_SECONDS = 24 * 60 * 60" in update_source
     assert 'expected_suffix = ".pkg" if platform_name == "darwin" else "-Windows-Setup.exe"' in update_source
     assert "certifi.where()" in update_source
+    installer_source = (project_root / "installer_update.py").read_text(encoding="utf-8")
+    assert 'active_platform == "darwin"' in installer_source
+    assert 'active_platform == "win32"' in installer_source
+    assert 'parsed.hostname != "github.com"' in installer_source
 
 
 def test_shared_automatic_scheduler_starts_through_both_platform_launchers():

@@ -10,7 +10,7 @@ Windows-udgaven bruger samme dashboard, SelfService-synkronisering, profiler, hi
 
 ## Anbefalet installation
 
-1. Download `RosterMate-1.13.0-Windows-Setup.exe` fra den seneste GitHub Release.
+1. Download `RosterMate-1.14.0-Windows-Setup.exe` fra den seneste GitHub Release.
 2. Dobbeltklik på installationsfilen.
 3. Vælg eventuelt en skrivebordsgenvej og gennemfør guiden.
 4. Lad installationsprogrammet hente Python, RosterMates afhængigheder og Chromium.
@@ -151,7 +151,7 @@ $env:ROSTERMATE_SKIP_UPDATE = "1"
 .\run-windows.cmd
 ```
 
-Alle installationstyper kontrollerer GitHub Releases højst én gang i døgnet. Hvis en nyere version findes, viser dashboardet versionsnummeret og knappen **Hent opdatering**, som peger direkte på den aktuelle Windows `Setup.exe`. Resultatet gemmes lokalt, og RosterMate fortsætter normalt, hvis GitHub ikke kan kontaktes. Der sendes ingen profil-, chauffør- eller kalenderdata med kontrollen.
+Alle installationstyper kontrollerer GitHub Releases højst én gang i døgnet. Hvis en nyere version findes, viser dashboardet versionsnummeret og knappen **Hent og installér**. Et aktivt klik henter den aktuelle Windows `Setup.exe` og åbner Windows Setup. RosterMate kontrollerer først HTTPS-adresse, versionsbestemt filnavn, filstørrelse og installationsfilens filtype. Følg installationsprogrammet, og start RosterMate igen bagefter. Installationen startes aldrig uden brugerens klik og godkendelse. Resultatet af versionskontrollen gemmes lokalt, og RosterMate fortsætter normalt, hvis GitHub ikke kan kontaktes. Der sendes ingen profil-, chauffør- eller kalenderdata med kontrollen.
 
 ## Test
 

@@ -11,7 +11,7 @@ Denne guide indeholder installation, opdatering og teknisk drift af RosterMate p
 
 ## Anbefalet installation
 
-Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.13.0-macOS.pkg`, og dobbeltklik på filen. Du behøver ikke åbne Terminal.
+Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.14.0-macOS.pkg`, og dobbeltklik på filen. Du behøver ikke åbne Terminal.
 
 Installationsprogrammet placerer RosterMate i **Programmer**, kontrollerer en kompatibel officiel Python-version, opretter appens eget isolerede miljø og installerer alle Python-afhængigheder samt Chromium-browseren til SelfService. macOS beder om administratorgodkendelse. RosterMate bruger port 8080, hvis den er ledig; ellers vælges automatisk den første ledige port frem til 8179. Efter installationen starter appen og åbner opsætningsguiden automatisk på den valgte port. Første installation kan tage et par minutter.
 
@@ -96,7 +96,7 @@ python3 app.py
 
 `run.command` kontrollerer automatisk den aktuelle tracking-branch på GitHub. Opdateringen installeres kun som en sikker fast-forward og overskriver ikke lokale ændringer i trackede filer.
 
-Alle installationstyper kontrollerer desuden GitHub Releases højst én gang i døgnet. Hvis en nyere version findes, viser dashboardet versionsnummeret og knappen **Hent opdatering**, som peger direkte på den aktuelle macOS `.pkg`. Resultatet gemmes lokalt, og RosterMate fortsætter normalt, hvis GitHub ikke kan kontaktes. Der sendes ingen profil-, chauffør- eller kalenderdata med kontrollen.
+Alle installationstyper kontrollerer desuden GitHub Releases højst én gang i døgnet. Hvis en nyere version findes, viser dashboardet versionsnummeret og knappen **Hent og installér**. Et aktivt klik henter den aktuelle macOS `.pkg` og åbner macOS Installer. RosterMate kontrollerer først HTTPS-adresse, versionsbestemt filnavn, filstørrelse og pakkens filtype. Følg Apples installationsvindue, og start RosterMate igen bagefter. Installationen startes aldrig uden brugerens klik og godkendelse. Resultatet af versionskontrollen gemmes lokalt, og RosterMate fortsætter normalt, hvis GitHub ikke kan kontaktes. Der sendes ingen profil-, chauffør- eller kalenderdata med kontrollen.
 
 Spring kontrollen over ved en enkelt start:
 

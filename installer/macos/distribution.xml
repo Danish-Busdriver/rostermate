@@ -13,5 +13,5 @@
   <choice id="rostermate" visible="false">
     <pkg-ref id="io.github.danish-busdriver.rostermate.pkg"/>
   </choice>
-  <pkg-ref id="io.github.danish-busdriver.rostermate.pkg" version="1.13.0" onConclusion="none">RosterMate-component.pkg</pkg-ref>
+  <pkg-ref id="io.github.danish-busdriver.rostermate.pkg" version="1.14.0" onConclusion="none">RosterMate-component.pkg</pkg-ref>
 </installer-gui-script>

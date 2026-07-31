@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "1.13.0"
+  #define AppVersion "1.14.0"
 #endif
 
 #define AppName "RosterMate"

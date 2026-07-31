@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-blue" alt="macOS">
   <img src="https://img.shields.io/badge/platform-Windows-0078D4" alt="Windows">
-  <img src="https://img.shields.io/badge/version-1.13.0-00A9CE" alt="Version 1.13.0">
+  <img src="https://img.shields.io/badge/version-1.14.0-00A9CE" alt="Version 1.14.0">
   <img src="https://img.shields.io/badge/license-MIT-red" alt="MIT license">
 </p>
 
@@ -37,7 +37,7 @@ Vælg selv, hvor mange dage der skal hentes. RosterMate følger perioden på tv�
 - Kalenderlink til samme computer, lokalt netværk eller en valgfri HTTPS-adresse
 - Historik, ændringsregistrering og automatisk backup
 - Separate profiler til flere chauffører
-- Daglig versionskontrol med downloadknap ved nye udgivelser
+- Daglig versionskontrol med **Hent og installér**, som åbner det rigtige installationsprogram
 - RosterMate-logo i Mac-menulinjen og Windows-systembakken
 - Automatisk valg af en ledig lokal port
 
@@ -50,7 +50,7 @@ Login- og kalenderdata bliver på din egen computer. En tom eller afbrudt hentni
 3. Vælg hvor mange dage frem der skal synkroniseres.
 4. Tilføj RosterMates kalenderlink i din foretrukne kalenderapp.
 
-Herefter kan du altid synkronisere manuelt fra dashboardet. Automatisk sync fordeles, så rammeansatte synkroniserer én gang dagligt mellem kl. 12 og 14, timelønnede én gang dagligt mellem kl. 9 og 16, mens fast turnus synkroniserer tirsdag og torsdag mellem kl. 9 og 16. Hver profil får egne faste, tilfældigt valgte tider inden for vinduerne, og auto-sync kan slås fra for den enkelte profil. Dashboardet viser seneste automatiske forsøg og giver en direkte mulighed for at prøve igen ved fejl. RosterMate forsøger først automatisk login og viser kun loginvinduet, hvis SelfService ikke længere accepterer de gemte oplysninger.
+Herefter kan du altid synkronisere manuelt fra dashboardet. Automatisk sync fordeles, så rammeansatte synkroniserer én gang dagligt mellem kl. 12 og 14, timelønnede én gang dagligt mellem kl. 9 og 16, mens fast turnus synkroniserer tirsdag og torsdag mellem kl. 9 og 16. Hver profil får egne faste, tilfældigt valgte tider inden for vinduerne, og auto-sync kan slås fra for den enkelte profil. Dashboardet viser seneste automatiske forsøg og giver en direkte mulighed for at prøve igen ved fejl. RosterMate forsøger først automatisk login og viser kun loginvinduet, hvis SelfService ikke længere accepterer de gemte oplysninger. Ved en ny udgivelse kan dashboardet hente den korrekte GitHub-fil og åbne macOS Installer eller Windows Setup; installationen gennemføres først efter brugerens aktive klik og godkendelse.
 
 ## Se RosterMate
 
@@ -83,7 +83,7 @@ Herefter kan du altid synkronisere manuelt fra dashboardet. Automatisk sync ford
 - [x] ICS-eksport og kalenderdeling
 - [x] Flere chaufførprofiler
 - [x] Mac-menulinjeikon og Windows-systembakke
-- [x] Daglig versionskontrol
+- [x] Daglig versionskontrol med hentning og start af platformens installationsprogram
 - [x] Direkte macOS PKG og Windows Setup.exe
 - [x] Afinstallation på begge platforme
 
@@ -101,8 +101,8 @@ Herefter kan du altid synkronisere manuelt fra dashboardet. Automatisk sync ford
 
 ## Hent RosterMate
 
-- [RosterMate 1.13.0 til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.13.0-macOS.pkg)
-- [RosterMate 1.13.0 til Windows](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.13.0-Windows-Setup.exe)
+- [RosterMate 1.14.0 til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.14.0-macOS.pkg)
+- [RosterMate 1.14.0 til Windows](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.14.0-Windows-Setup.exe)
 
 Teknisk installation, fejlfinding og afinstallation findes i de separate vejledninger:
 

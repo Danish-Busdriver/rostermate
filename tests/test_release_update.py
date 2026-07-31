@@ -4,10 +4,12 @@ import io
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from release_update import CHECK_INTERVAL_SECONDS, check_for_release_update
+import app as app_module
 
 
 class Response(io.BytesIO):
@@ -124,13 +126,74 @@ def test_fresh_cache_stops_showing_release_after_app_was_updated(tmp_path):
         opener=github_release_opener,
     )
 
+    requests = []
     result = check_for_release_update(
         cache_path,
         "1.8.0",
         platform_name="darwin",
         now=1001,
-        opener=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must use cache")),
+        opener=lambda *args, **kwargs: requests.append((args, kwargs)) or github_release_opener(*args, **kwargs),
     )
 
     assert result["available"] is False
     assert result["current_version"] == "1.8.0"
+    assert len(requests) == 1
+
+
+def test_changed_installed_version_forces_a_fresh_release_check(tmp_path):
+    cache_path = tmp_path / "release-update.json"
+    check_for_release_update(
+        cache_path,
+        "1.8.0",
+        platform_name="darwin",
+        now=1000,
+        opener=github_release_opener,
+    )
+    requests = []
+
+    result = check_for_release_update(
+        cache_path,
+        "1.7.9",
+        platform_name="darwin",
+        now=1001,
+        opener=lambda *args, **kwargs: requests.append((args, kwargs)) or github_release_opener(*args, **kwargs),
+    )
+
+    assert result["available"] is True
+    assert result["latest_version"] == "1.8.0"
+    assert len(requests) == 1
+
+
+def test_install_update_route_downloads_and_launches_selected_asset(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "STORAGE_ROOT", tmp_path)
+    monkeypatch.setattr(app_module, "check_for_release_update", lambda *_args, **_kwargs: {
+        "available": True,
+        "latest_version": "1.14.0",
+        "download_url": "https://github.com/Danish-Busdriver/rostermate/releases/download/v1.14.0/RosterMate-1.14.0-macOS.pkg",
+    })
+    calls = []
+    monkeypatch.setattr(
+        app_module,
+        "download_and_launch_installer",
+        lambda url, version, destination: calls.append((url, version, destination)) or SimpleNamespace(message="Installer åbnet"),
+    )
+    app_module.app.config["TESTING"] = True
+
+    with app_module.app.test_client() as client:
+        response = client.post("/1234/install-update")
+
+    assert response.status_code == 200
+    assert response.get_json()["message"] == "Installer åbnet"
+    assert calls[0][1:] == ("1.14.0", tmp_path / "updates")
+
+
+def test_install_update_route_refuses_when_current(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "STORAGE_ROOT", tmp_path)
+    monkeypatch.setattr(app_module, "check_for_release_update", lambda *_args, **_kwargs: {"available": False})
+    app_module.app.config["TESTING"] = True
+
+    with app_module.app.test_client() as client:
+        response = client.post("/1234/install-update")
+
+    assert response.status_code == 409
+    assert "ingen nyere" in response.get_json()["message"]

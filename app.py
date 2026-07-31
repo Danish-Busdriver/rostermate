@@ -28,6 +28,7 @@ from automatic_sync import (
 from dashboard import should_show_first_run, should_show_welcome_back
 from credentials import get_password, set_password
 from launch_agent import sync_launch_agent_preference
+from installer_update import InstallerUpdateError, download_and_launch_installer
 from login import launch_authenticated_context, login_manager, read_stable_page_content, save_session_storage
 from notifications import send_change_notification
 from port_config import configured_port, port_is_available, save_port, valid_port
@@ -68,7 +69,7 @@ EVENTS_STORE_PATH = OUTPUT_DIR / "events_store.json"
 CHANGES_PATH = OUTPUT_DIR / "changes.json"
 ICS_PATH = OUTPUT_DIR / "vagter.ics"
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.13.0"
+APP_VERSION = "1.14.0"
 SYNC_LOCKS: dict[str, threading.Lock] = {}
 SYNC_LOCKS_GUARD = threading.Lock()
 
@@ -367,6 +368,7 @@ def driver_urls(driver_id: str) -> dict[str, str]:
         "history_url": f"{base_path}/history",
         "sync_url": f"{base_path}/sync",
         "settings_post_url": f"{base_path}/settings",
+        "install_update_url": f"{base_path}/install-update",
         "calendar_url": f"{base_path}/calendar.ics",
     }
 
@@ -1920,8 +1922,12 @@ def index(driver_id: str) -> str:
                     display: grid;
                     gap: 0.2rem;
                 }
-                .update-banner .button-link {
+                .update-banner form { margin: 0; }
+                .update-banner .button-link,
+                .update-banner button {
                     flex: 0 0 auto;
+                    width: auto;
+                    margin: 0;
                     background: var(--warning-text);
                     color: white;
                     border-color: var(--warning-text);
@@ -2461,7 +2467,9 @@ def index(driver_id: str) -> str:
                         <strong>Ny RosterMate-version er tilgængelig</strong>
                         <span>Version {{ update_status.latest_version }} kan hentes til {{ 'Windows' if update_status.platform == 'win32' else 'macOS' }}.</span>
                     </div>
-                    <a class="button-link" href="{{ update_status.download_url }}" target="_blank" rel="noopener noreferrer">Hent opdatering</a>
+                    <form onsubmit="handleFormSubmit(event, '{{ urls.install_update_url }}')">
+                        <button type="submit">Hent og installér</button>
+                    </form>
                 </div>
                 {% endif %}
                 <div class="hero">
@@ -2704,6 +2712,34 @@ def index(driver_id: str) -> str:
         automatic_status=automatic_status,
         platform_labels=ui_platform_labels(),
     )
+
+
+@app.route("/<driver_id>/install-update", methods=["POST"])
+def install_update(driver_id: str) -> tuple[Any, int]:
+    normalize_driver_id(driver_id)
+    update_status = check_for_release_update(STORAGE_ROOT / "release_update.json", APP_VERSION)
+    if not update_status.get("available"):
+        return jsonify({"status": "error", "message": "Der er ingen nyere RosterMate-version tilgængelig."}), 409
+    version = str(update_status.get("latest_version") or "")
+    download_url = str(update_status.get("download_url") or "")
+    if not version or not download_url:
+        return jsonify({"status": "error", "message": "GitHub-releasen mangler en installationsfil til denne platform."}), 409
+    try:
+        result = download_and_launch_installer(
+            download_url,
+            version,
+            STORAGE_ROOT / "updates",
+        )
+    except (InstallerUpdateError, OSError, ValueError) as exc:
+        return jsonify({
+            "status": "error",
+            "message": f"Opdateringen kunne ikke startes: {compact_error_message(exc)}",
+        }), 500
+    return jsonify({
+        "status": "ok",
+        "message": result.message,
+        "version": version,
+    }), 200
 
 
 @app.route("/<driver_id>/import", methods=["POST"])
