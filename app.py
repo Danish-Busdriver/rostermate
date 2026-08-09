@@ -35,7 +35,8 @@ from port_config import configured_port, port_is_available, save_port, valid_por
 from release_update import check_for_release_update
 from session_store import SelfServiceSessionStore
 from settings import apply_wizard_preferences, with_setup_defaults
-from sync import build_sync_preview, fetch_status_is_error, run_initial_sync
+from sync import build_sync_preview, fetch_status_is_error, run_initial_sync as run_initial_sync_core
+from telemetry import TelemetryClient
 from wizard import FIRST_RUN_TEMPLATE, WIZARD_PREFERENCES_TEMPLATE
 
 app = Flask(__name__)
@@ -69,9 +70,30 @@ EVENTS_STORE_PATH = OUTPUT_DIR / "events_store.json"
 CHANGES_PATH = OUTPUT_DIR / "changes.json"
 ICS_PATH = OUTPUT_DIR / "vagter.ics"
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.14.0"
+APP_VERSION = "1.15.0"
 SYNC_LOCKS: dict[str, threading.Lock] = {}
 SYNC_LOCKS_GUARD = threading.Lock()
+
+
+def telemetry_client() -> TelemetryClient:
+    return TelemetryClient(DATA_DIR.parent, BASE_DIR, APP_VERSION)
+
+
+def enqueue_sync_heartbeat() -> threading.Thread:
+    thread = threading.Thread(
+        target=telemetry_client().send_heartbeat,
+        name="rostermate-sync-heartbeat",
+        daemon=True,
+    )
+    thread.start()
+    return thread
+
+
+def run_initial_sync(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    try:
+        return run_initial_sync_core(*args, **kwargs)
+    finally:
+        enqueue_sync_heartbeat()
 
 
 def driver_sync_lock(driver_id: str) -> threading.Lock:
@@ -82,7 +104,15 @@ def driver_sync_lock(driver_id: str) -> threading.Lock:
 def fetch_schedule_with_retry(days_ahead: int, driver_id: str, attempts: int = 2) -> tuple[list[dict[str, Any]], str]:
     last_result: tuple[list[dict[str, Any]], str] = ([], "SelfService kunne ikke kontaktes")
     for attempt in range(max(1, attempts)):
-        last_result = fetch_selfservice_schedule(days_ahead, driver_id)
+        # Tide rejects otherwise valid sessions in Chromium's true headless
+        # mode. Use a normal browser offscreen so saved login state can be
+        # reused without displaying a window to the user.
+        last_result = fetch_selfservice_schedule(
+            days_ahead,
+            driver_id,
+            headless=False,
+            hide_window=True,
+        )
         events, message = last_result
         if events or not fetch_status_is_error(message):
             return last_result
@@ -369,6 +399,7 @@ def driver_urls(driver_id: str) -> dict[str, str]:
         "sync_url": f"{base_path}/sync",
         "settings_post_url": f"{base_path}/settings",
         "install_update_url": f"{base_path}/install-update",
+        "admin_url": f"{base_path}/admin",
         "calendar_url": f"{base_path}/calendar.ics",
     }
 
@@ -2451,6 +2482,7 @@ def index(driver_id: str) -> str:
                             <a href="{{ urls.dashboard_url }}" class="active">Dashboard</a>
                             <a href="{{ urls.settings_url }}">Indstillinger</a>
                             <a href="{{ urls.history_url }}">Historik</a>
+                            {% if show_admin %}<a href="{{ urls.admin_url }}">Admin</a>{% endif %}
                             {% if not show_profile_switcher %}<a href="/?choose=1">Tilføj profil</a>{% endif %}
                         </nav>
                         {% if show_profile_switcher %}
@@ -2710,6 +2742,7 @@ def index(driver_id: str) -> str:
         needs_selfservice_setup=needs_selfservice_setup,
         update_status=update_status,
         automatic_status=automatic_status,
+        show_admin=telemetry_client().admin_configured(),
         platform_labels=ui_platform_labels(),
     )
 
@@ -2794,7 +2827,8 @@ def sync_route(driver_id: str) -> tuple[Any, int]:
             days_ahead,
             safe_driver_id,
             allow_credential_login=True,
-            headless=True,
+            headless=False,
+            hide_window=True,
         )
         if saved_events:
             had_existing_events = bool(load_json(paths["events_store_path"], []))
@@ -2867,6 +2901,8 @@ def settings_page(driver_id: str) -> str:
     needs_selfservice_setup = not has_selfservice_session
     show_profile_switcher = len(list_driver_ids()) > 1
     app_port = application_port()
+    telemetry = telemetry_client()
+    telemetry_state = telemetry.load_state()
     return render_template_string(
         """
         <!doctype html>
@@ -3176,6 +3212,7 @@ def settings_page(driver_id: str) -> str:
                             <a href="{{ urls.dashboard_url }}">Dashboard</a>
                             <a href="{{ urls.settings_url }}" class="active">Indstillinger</a>
                             <a href="{{ urls.history_url }}">Historik</a>
+                            {% if show_admin %}<a href="{{ urls.admin_url }}">Admin</a>{% endif %}
                             {% if not show_profile_switcher %}<a href="/?choose=1">Tilføj profil</a>{% endif %}
                         </nav>
                         {% if show_profile_switcher %}
@@ -3288,6 +3325,12 @@ def settings_page(driver_id: str) -> str:
                                     <div class="field-hint">En ændring træder i kraft, næste gang RosterMate genstartes. Kalenderlinks og opsætningsguiden følger automatisk den valgte port.</div>
                                 </div>
                             </div>
+                            <div class="section span-2">
+                                <h2>Anonym brugsstatistik</h2>
+                                <div class="small">Hjælp med at vise, hvor mange installationer der er aktive. Efter hver manuel eller planlagt synkronisering sender RosterMate et tilfældigt installations-ID, appversion og operativsystem. Der sendes aldrig navn, chaufførnummer, login eller kalenderdata.</div>
+                                <label class="row"><input type="checkbox" name="anonymous_usage_enabled" value="true" {% if telemetry_state.enabled %}checked{% endif %}> Del anonym brugsstatistik</label>
+                                {% if not telemetry_configured %}<div class="field-hint">Funktionen bliver aktiv, når telemetri-serveren er konfigureret i den installerede udgave.</div>{% endif %}
+                            </div>
                         </div>
                         <div class="helper-links">
                             <button type="submit">Gem indstillinger</button>
@@ -3309,6 +3352,9 @@ def settings_page(driver_id: str) -> str:
         show_profile_switcher=show_profile_switcher,
         app_port=app_port,
         automatic_schedule=schedule_summary(settings),
+        telemetry_state=telemetry_state,
+        telemetry_configured=telemetry.configured(),
+        show_admin=telemetry.admin_configured(),
     )
 
 
@@ -3324,6 +3370,7 @@ def settings_route(driver_id: str) -> tuple[Any, int]:
     remove_old_shifts = request.form.get("remove_old_shifts") == "true"
     automatic_sync_enabled = request.form.get("automatic_sync_enabled") == "true"
     notify_on_changes = request.form.get("notify_on_changes") == "true"
+    anonymous_usage_enabled = request.form.get("anonymous_usage_enabled") == "true"
     current_port = application_port()
     requested_port = valid_port(request.form.get("app_port", current_port))
     if requested_port is None:
@@ -3356,6 +3403,7 @@ def settings_route(driver_id: str) -> tuple[Any, int]:
                 "message": f"Adgangskoden kunne ikke gemmes i operativsystemets sikre nøglelager: {exc}",
             }), 500
     save_driver_settings(safe_driver_id, updated_settings)
+    telemetry_client().set_enabled(anonymous_usage_enabled)
     save_port(requested_port, root=DATA_DIR.parent)
     port_changed = requested_port != current_port
     message = "Indstillinger gemt. Genstart RosterMate for at bruge den nye port." if port_changed else "Indstillinger gemt"
@@ -3365,10 +3413,74 @@ def settings_route(driver_id: str) -> tuple[Any, int]:
         "employment_type": employment_type,
         "automatic_sync_enabled": automatic_sync_enabled,
         "notify_on_changes": notify_on_changes,
+        "anonymous_usage_enabled": anonymous_usage_enabled,
         "port": requested_port,
         "restart_required": port_changed,
         "next_url": f"http://localhost:{requested_port}/",
     })
+
+
+@app.route("/<driver_id>/admin")
+def admin_page(driver_id: str) -> str:
+    safe_driver_id = normalize_driver_id(driver_id)
+    telemetry = telemetry_client()
+    if not telemetry.admin_configured():
+        abort(404)
+    try:
+        stats = telemetry.fetch_stats()
+        error = ""
+    except Exception as exc:
+        stats = {"total": 0, "active_7_days": 0, "active_30_days": 0, "active_90_days": 0, "new_7_days": 0, "new_30_days": 0, "platforms": [], "versions": [], "activity": []}
+        error = str(exc)
+    activity_by_date = {
+        str(item.get("date")): int(item.get("installations") or 0)
+        for item in stats.get("activity", [])
+        if isinstance(item, dict)
+    }
+    activity = []
+    maximum_activity = max(activity_by_date.values(), default=1)
+    for offset in range(29, -1, -1):
+        activity_date = date.today() - timedelta(days=offset)
+        count = activity_by_date.get(activity_date.isoformat(), 0)
+        activity.append({
+            "date": activity_date.isoformat(),
+            "label": activity_date.strftime("%d/%m"),
+            "count": count,
+            "height": max(3, round((count / maximum_activity) * 100)) if count else 3,
+        })
+    current_version_count = sum(
+        int(item.get("count") or 0)
+        for item in stats.get("versions", [])
+        if isinstance(item, dict) and str(item.get("version")) == APP_VERSION
+    )
+    active_30_days = int(stats.get("active_30_days") or 0)
+    version_adoption = round((current_version_count / active_30_days) * 100) if active_30_days else 0
+    return render_template_string(
+        """
+        <!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>RosterMate Admin</title><style>
+        :root{--bg:#eef4fb;--panel:#fff;--text:#14213d;--muted:#64748b;--accent:#10213c;--border:#dbe6f2}
+        *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--text);background:linear-gradient(180deg,#f7fbff,var(--bg))}a{text-decoration:none;color:inherit}
+        .container{max-width:1050px;margin:auto;padding:1.5rem 1.25rem 3rem}.topbar{display:flex;justify-content:space-between;gap:1rem;align-items:center;margin-bottom:1rem}.brand{display:flex;align-items:center;gap:.65rem;font-weight:800}.brand img{width:42px;height:42px;border-radius:12px}.nav{display:flex;gap:.7rem;flex-wrap:wrap}.nav a{padding:.7rem 1rem;border:1px solid var(--border);border-radius:999px;background:#fff;font-weight:600}.nav a.active{background:var(--accent);color:#fff}
+        .hero{padding:1.5rem;border-radius:24px;background:linear-gradient(120deg,#10213c,#17355f 62%,#0f766e);color:#fff;margin-bottom:1rem}.hero h1{margin:0 0 .4rem}.hero p{margin:0;opacity:.84}.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem}.card,.panel{background:var(--panel);border:1px solid var(--border);border-radius:20px;padding:1.2rem}.card span{color:var(--muted);font-size:.9rem}.card strong{display:block;font-size:2rem;margin-top:.35rem}.grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem}.panel h2{margin-top:0}.row{display:flex;justify-content:space-between;padding:.65rem 0;border-bottom:1px solid var(--border)}.row:last-child{border:0}.error{background:#fce9e7;color:#b42318;padding:1rem;border-radius:16px;margin-bottom:1rem}.chart{height:180px;display:flex;align-items:flex-end;gap:5px;margin-top:1rem;padding-top:1rem;border-bottom:1px solid var(--border)}.bar{flex:1;min-width:4px;background:linear-gradient(180deg,#14b8a6,#10213c);border-radius:6px 6px 0 0;position:relative}.bar:hover:after{content:attr(data-label);position:absolute;bottom:calc(100% + 7px);left:50%;transform:translateX(-50%);background:#10213c;color:#fff;padding:.35rem .5rem;border-radius:8px;white-space:nowrap;font-size:.76rem;z-index:2}.chart-note{color:var(--muted);font-size:.86rem;margin:.65rem 0 0}@media(max-width:760px){.cards{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}}
+        </style></head><body><main class="container">
+        <div class="topbar"><div class="brand"><img src="/static/Rostermate.png" alt="RosterMate logo"><span>RosterMate Admin</span></div><nav class="nav"><a href="{{ urls.dashboard_url }}">Dashboard</a><a href="{{ urls.settings_url }}">Indstillinger</a><a href="{{ urls.history_url }}">Historik</a><a class="active" href="{{ urls.admin_url }}">Admin</a></nav></div>
+        <section class="hero"><h1>Aktive installationer</h1><p>Anonyme livstegn fra installationer, der frivilligt har slået brugsstatistik til.</p></section>
+        {% if error %}<div class="error">Telemetri-serveren kunne ikke kontaktes: {{ error }}</div>{% endif %}
+        <section class="cards"><div class="card"><span>Seneste 7 dage</span><strong>{{ stats.active_7_days }}</strong></div><div class="card"><span>Seneste 30 dage</span><strong>{{ stats.active_30_days }}</strong></div><div class="card"><span>Seneste 90 dage</span><strong>{{ stats.active_90_days }}</strong></div><div class="card"><span>Registreret i alt</span><strong>{{ stats.total }}</strong></div></section>
+        <section class="cards" style="margin-top:1rem"><div class="card"><span>Nye · 7 dage</span><strong>{{ stats.new_7_days }}</strong></div><div class="card"><span>Nye · 30 dage</span><strong>{{ stats.new_30_days }}</strong></div><div class="card"><span>På version {{ app_version }}</span><strong>{{ current_version_count }}</strong></div><div class="card"><span>Opdateret · 30 dage</span><strong>{{ version_adoption }}%</strong></div></section>
+        <section class="panel" style="margin-top:1rem"><h2>Sync-aktivitet · 30 dage</h2><div class="chart" aria-label="Installationer der synkroniserede pr. dag">{% for item in activity %}<div class="bar" style="height:{{ item.height }}%" data-label="{{ item.label }} · {{ item.count }}" title="{{ item.label }} · {{ item.count }} installationer"></div>{% endfor %}</div><p class="chart-note">Hver søjle viser antal forskellige installationer, der sendte mindst ét sync-livstegn den pågældende dag.</p></section>
+        <section class="grid"><div class="panel"><h2>Platforme · 30 dage</h2>{% for item in stats.platforms %}<div class="row"><span>{{ 'Windows' if item.platform == 'windows' else 'macOS' if item.platform == 'macos' else item.platform }}</span><strong>{{ item.count }}</strong></div>{% else %}<p>Ingen data endnu.</p>{% endfor %}</div><div class="panel"><h2>Versioner · 30 dage</h2>{% for item in stats.versions %}<div class="row"><span>{{ item.version }}</span><strong>{{ item.count }}</strong></div>{% else %}<p>Ingen data endnu.</p>{% endfor %}</div></section>
+        </main></body></html>
+        """,
+        stats=stats,
+        error=error,
+        urls=driver_urls(safe_driver_id),
+        activity=activity,
+        app_version=APP_VERSION,
+        current_version_count=current_version_count,
+        version_adoption=version_adoption,
+    )
 
 
 @app.route("/<driver_id>/history")
@@ -3531,6 +3643,7 @@ def history_page(driver_id: str) -> str:
                             <a href="{{ urls.dashboard_url }}">Dashboard</a>
                             <a href="{{ urls.settings_url }}">Indstillinger</a>
                             <a href="{{ urls.history_url }}" class="active">Historik</a>
+                            {% if show_admin %}<a href="{{ urls.admin_url }}">Admin</a>{% endif %}
                             {% if not show_profile_switcher %}<a href="/?choose=1">Tilføj profil</a>{% endif %}
                         </nav>
                         {% if show_profile_switcher %}
@@ -3585,6 +3698,7 @@ def history_page(driver_id: str) -> str:
         history=formatted_history,
         urls=urls,
         show_profile_switcher=show_profile_switcher,
+        show_admin=telemetry_client().admin_configured(),
     )
 
 

@@ -6,7 +6,7 @@ on:
       version:
         description: "RosterMate version without leading v"
         required: true
-        default: "1.14.0"
+        default: "1.15.0"
 
 jobs:
   build:
@@ -28,7 +28,13 @@ jobs:
           python -m pytest -q
 
       - name: Build PKG installer
+        env:
+          TELEMETRY_URL: ${{ vars.ROSTERMATE_TELEMETRY_URL }}
+          TELEMETRY_KEY: ${{ secrets.ROSTERMATE_TELEMETRY_KEY }}
         run: |
+          if [ -n "$TELEMETRY_URL" ] && [ -n "$TELEMETRY_KEY" ]; then
+            python -c 'import os,pathlib; pathlib.Path("telemetry_runtime_config.py").write_text("TELEMETRY_CONFIG = " + repr({"heartbeat_url": os.environ["TELEMETRY_URL"], "ingest_key": os.environ["TELEMETRY_KEY"]}) + "\n", encoding="utf-8")'
+          fi
           chmod +x build-macos-pkg.command installer/macos/scripts/postinstall
           bash -n build-macos-pkg.command install.command installer/macos/scripts/postinstall
           curl --fail --head --location --retry 3 https://www.python.org/ftp/python/3.14.6/python-3.14.6-macos11.pkg

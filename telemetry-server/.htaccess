@@ -1,0 +1,4 @@
+Options -Indexes
+<FilesMatch "^(bootstrap\.php|cleanup\.php|schema\.sql|config\.example\.php)$">
+  Require all denied
+</FilesMatch>

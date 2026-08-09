@@ -1,0 +1,6 @@
+{
+  "heartbeat_url": "https://telemetry.example.dk/heartbeat.php",
+  "ingest_key": "public-ingest-key",
+  "stats_url": "https://telemetry.example.dk/stats.php",
+  "admin_key": "private-admin-key"
+}

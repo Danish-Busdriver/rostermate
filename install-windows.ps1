@@ -29,7 +29,7 @@ function Find-RosterMatePython {
 
 $SystemPython = Find-RosterMatePython
 if (-not $SystemPython) {
-    $InstallerPath = Join-Path $env:TEMP "rostermate-python-$PythonVersion-amd64.exe"
+    $InstallerPath = Join-Path $env:TEMP "rostermate-python-$PythonVersion-$([guid]::NewGuid().ToString('N'))-amd64.exe"
     $DownloadUrl = "https://www.python.org/ftp/python/$PythonVersion/python-$PythonVersion-amd64.exe"
     Write-Host "Henter Python $PythonVersion fra python.org..."
     Invoke-WebRequest -UseBasicParsing -Uri $DownloadUrl -OutFile $InstallerPath

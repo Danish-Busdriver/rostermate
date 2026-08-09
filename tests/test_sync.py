@@ -9,6 +9,22 @@ from app import build_event_from_shift, list_driver_ids, navigate_selfservice_mo
 from sync import fetch_status_is_error, run_initial_sync
 
 
+def test_background_fetch_uses_offscreen_headed_browser(monkeypatch):
+    calls = []
+
+    def fake_fetch(days_ahead, driver_id, **kwargs):
+        calls.append((days_ahead, driver_id, kwargs))
+        return [{"id": "shift"}], "ok"
+
+    monkeypatch.setattr(app_module, "fetch_selfservice_schedule", fake_fetch)
+
+    events, status = app_module.fetch_schedule_with_retry(30, "1234")
+
+    assert events == [{"id": "shift"}]
+    assert status == "ok"
+    assert calls == [(30, "1234", {"headless": False, "hide_window": True})]
+
+
 def test_build_event_from_shift_handles_regular_and_all_day_shifts():
     regular = build_event_from_shift({"id": "DO_afløs", "from": "05:15", "to": "13:02"}, "2026-07-08")
     assert regular["title"] == "DO_afløs"

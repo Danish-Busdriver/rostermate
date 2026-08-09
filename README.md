@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-blue" alt="macOS">
   <img src="https://img.shields.io/badge/platform-Windows-0078D4" alt="Windows">
-  <img src="https://img.shields.io/badge/version-1.14.0-00A9CE" alt="Version 1.14.0">
+  <img src="https://img.shields.io/badge/version-1.15.0-00A9CE" alt="Version 1.15.0">
   <img src="https://img.shields.io/badge/license-MIT-red" alt="MIT license">
 </p>
 
@@ -26,7 +26,7 @@ Vælg selv, hvor mange dage der skal hentes. RosterMate følger perioden på tv�
 - Automatisk hentning af vagter fra Tide SelfService
 - Belastningsspredt automatisk sync på et fast, tilfældigt tidspunkt for hver profil
 - Auto-sync kan slås til eller fra separat for hver chaufførprofil
-- Skjult genlogin med adgangskoden sikkert gemt i macOS-nøgleringen eller Windows Credential Manager
+- Skjult genlogin i en offscreen-browser med adgangskoden sikkert gemt i macOS-nøgleringen eller Windows Credential Manager
 - Synligt loginvindue som reserve, hvis SelfService kræver ny godkendelse
 - Synkronisering på tværs af kalendermåneder
 - Dashboard med status, kommende vagter og seneste ændringer
@@ -70,6 +70,14 @@ Herefter kan du altid synkronisere manuelt fra dashboardet. Automatisk sync ford
 
 [![RosterMate indstillinger](assets/screenshots/settings.png)](assets/screenshots/settings.png)
 
+Brugeren kan frivilligt dele anonym brugsstatistik. RosterMate sender da et livstegn efter hver manuel eller planlagt synkronisering med et tilfældigt installations-ID, appversion og operativsystem — aldrig chaufførnummer, login eller kalenderdata.
+
+### Adminpanel
+
+[![RosterMate adminpanel](assets/screenshots/admin.png)](assets/screenshots/admin.png)
+
+Det private adminpanel giver ejeren et samlet overblik over aktive og nye installationer, 30 dages sync-aktivitet, platforme og udbredelsen af den nyeste version. Panelet vises kun, når den private adminadgang er konfigureret lokalt.
+
 ## Roadmap
 
 ### Tilgængeligt nu
@@ -86,6 +94,7 @@ Herefter kan du altid synkronisere manuelt fra dashboardet. Automatisk sync ford
 - [x] Daglig versionskontrol med hentning og start af platformens installationsprogram
 - [x] Direkte macOS PKG og Windows Setup.exe
 - [x] Afinstallation på begge platforme
+- [x] Frivillig anonym optælling af aktive installationer
 
 ### Næste versioner
 
@@ -101,8 +110,8 @@ Herefter kan du altid synkronisere manuelt fra dashboardet. Automatisk sync ford
 
 ## Hent RosterMate
 
-- [RosterMate 1.14.0 til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.14.0-macOS.pkg)
-- [RosterMate 1.14.0 til Windows](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.14.0-Windows-Setup.exe)
+- [RosterMate 1.15.0 til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.15.0-macOS.pkg)
+- [RosterMate 1.15.0 til Windows](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.15.0-Windows-Setup.exe)
 
 Teknisk installation, fejlfinding og afinstallation findes i de separate vejledninger:
 

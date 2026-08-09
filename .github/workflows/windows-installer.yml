@@ -6,7 +6,7 @@ on:
       version:
         description: "RosterMate version without leading v"
         required: true
-        default: "1.14.0"
+        default: "1.15.0"
 
 jobs:
   build:
@@ -36,7 +36,13 @@ jobs:
 
       - name: Build Setup.exe
         shell: powershell
+        env:
+          TELEMETRY_URL: ${{ vars.ROSTERMATE_TELEMETRY_URL }}
+          TELEMETRY_KEY: ${{ secrets.ROSTERMATE_TELEMETRY_KEY }}
         run: |
+          if ($env:TELEMETRY_URL -and $env:TELEMETRY_KEY) {
+            python -c 'import os,pathlib; pathlib.Path("telemetry_runtime_config.py").write_text("TELEMETRY_CONFIG = " + repr({"heartbeat_url": os.environ["TELEMETRY_URL"], "ingest_key": os.environ["TELEMETRY_KEY"]}) + "\n", encoding="utf-8")'
+          }
           $Compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           & $Compiler "/DAppVersion=${{ inputs.version }}" "installer\windows\RosterMate.iss"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

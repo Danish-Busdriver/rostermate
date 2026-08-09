@@ -146,6 +146,8 @@ def test_windows_exe_installer_definition_is_present():
 
     assert "PrivilegesRequired=lowest" in installer
     assert "install-windows.ps1" in installer
+    assert "CurStepChanged" in installer
+    assert "RaiseException" in installer
     assert "run-windows.cmd" in installer
     assert "[UninstallDelete]" in installer
     assert "ISCC.exe" in workflow
