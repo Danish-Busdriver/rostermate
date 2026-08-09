@@ -15,3 +15,7 @@ Caddyfile.local
 rostermate-tray.pid
 release_update.json
 release_update.json.tmp
+telemetry-config.json
+telemetry_runtime_config.py
+telemetry-server/config.php
+simply-ftp.json

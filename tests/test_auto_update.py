@@ -4,9 +4,17 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from auto_update import check_for_updates
+
+
+@pytest.fixture(autouse=True)
+def isolated_update_environment(monkeypatch):
+    monkeypatch.delenv("ROSTERMATE_SKIP_UPDATE", raising=False)
+    monkeypatch.setattr("auto_update.shutil.which", lambda command: "git" if command == "git" else None)
 
 
 class FakeRunner:

@@ -10,7 +10,7 @@ Windows-udgaven bruger samme dashboard, SelfService-synkronisering, profiler, hi
 
 ## Anbefalet installation
 
-1. Download `RosterMate-1.14.0-Windows-Setup.exe` fra den seneste GitHub Release.
+1. Download `RosterMate-1.15.0-Windows-Setup.exe` fra den seneste GitHub Release.
 2. Dobbeltklik på installationsfilen.
 3. Vælg eventuelt en skrivebordsgenvej og gennemfør guiden.
 4. Lad installationsprogrammet hente Python, RosterMates afhængigheder og Chromium.
@@ -108,6 +108,8 @@ De præcise tider vises under **Indstillinger → Synkronisering**, hvor auto-sy
 
 Indstillingen **Vis en systembesked, når vagter ændres** bruger Windows' egne systembakke-beskeder. Den første hentning giver ingen besked; notifikationen vises kun, når en senere synkronisering faktisk tilføjer, ændrer eller fjerner vagter.
 
+Automatisk og manuel sync genbruger den gemte SelfService-profil i en almindelig Chromium-browser placeret skjult uden for skærmen. Tide afviser i nogle miljøer en ægte headless-browser, selvom sessionen er gyldig. Et synligt loginvindue åbnes derfor kun, hvis den offscreen-browser heller ikke kan bruge sessionen eller de gemte loginoplysninger.
+
 RosterMate skal køre på det valgte tidspunkt. Aktivér **Start automatisk med Windows** for at lade appen starte ved login; en slukket eller sovende pc vækkes ikke af RosterMate.
 
 ## Lokale data
@@ -152,6 +154,8 @@ $env:ROSTERMATE_SKIP_UPDATE = "1"
 ```
 
 Alle installationstyper kontrollerer GitHub Releases højst én gang i døgnet. Hvis en nyere version findes, viser dashboardet versionsnummeret og knappen **Hent og installér**. Et aktivt klik henter den aktuelle Windows `Setup.exe` og åbner Windows Setup. RosterMate kontrollerer først HTTPS-adresse, versionsbestemt filnavn, filstørrelse og installationsfilens filtype. Følg installationsprogrammet, og start RosterMate igen bagefter. Installationen startes aldrig uden brugerens klik og godkendelse. Resultatet af versionskontrollen gemmes lokalt, og RosterMate fortsætter normalt, hvis GitHub ikke kan kontaktes. Der sendes ingen profil-, chauffør- eller kalenderdata med kontrollen.
+
+Under **Indstillinger → Anonym brugsstatistik** kan du frivilligt dele et livstegn efter hver manuel eller planlagt synkronisering. Det indeholder kun et tilfældigt installations-ID, RosterMate-version og `Windows`. Funktionen er slået fra som standard og sender aldrig chaufførnummer, SelfService-login eller kalenderdata.
 
 ## Test
 

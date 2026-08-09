@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-VERSION="${1:-1.14.0}"
+VERSION="${1:-1.15.0}"
 BUILD_PARENT="$SCRIPT_DIR/dist/.pkg-build"
 mkdir -p "$BUILD_PARENT"
 BUILD_DIR="$(mktemp -d "$BUILD_PARENT/rostermate-pkg.XXXXXX")"
@@ -26,9 +26,13 @@ mkdir -p "$PAYLOAD_DIR" "$OUTPUT_DIR"
     done |
     COPYFILE_DISABLE=1 cpio -0 -pdm "$PAYLOAD_DIR"
 )
+if [ -f "$SCRIPT_DIR/telemetry_runtime_config.py" ]; then
+  cp "$SCRIPT_DIR/telemetry_runtime_config.py" "$PAYLOAD_DIR/telemetry_runtime_config.py"
+fi
 rm -rf "$PAYLOAD_DIR/.venv" "$PAYLOAD_DIR/data" "$PAYLOAD_DIR/output" \
   "$PAYLOAD_DIR/backups" "$PAYLOAD_DIR/.pytest_cache" "$PAYLOAD_DIR/dist" \
-  "$PAYLOAD_DIR/.github" "$PAYLOAD_DIR/tests" "$PAYLOAD_DIR/installer"
+  "$PAYLOAD_DIR/.github" "$PAYLOAD_DIR/tests" "$PAYLOAD_DIR/installer" \
+  "$PAYLOAD_DIR/scripts" "$PAYLOAD_DIR/telemetry-server"
 rm -f "$PAYLOAD_DIR/.env" "$PAYLOAD_DIR/.DS_Store"
 rm -f "$PAYLOAD_DIR/AGENTS.md" "$PAYLOAD_DIR/windows_launcher.py" \
   "$PAYLOAD_DIR/install-windows.cmd" "$PAYLOAD_DIR/install-windows.ps1" \
@@ -52,7 +56,7 @@ chmod +x "$SCRIPT_DIR/installer/macos/scripts/postinstall"
   "$COMPONENT_PKG"
 
 cp "$SCRIPT_DIR/installer/macos/distribution.xml" "$BUILD_DIR/distribution.xml"
-sed -i '' "s/version=\"1.14.0\"/version=\"$VERSION\"/" "$BUILD_DIR/distribution.xml"
+sed -i '' "s/version=\"1.15.0\"/version=\"$VERSION\"/" "$BUILD_DIR/distribution.xml"
 
 /usr/bin/productbuild \
   --distribution "$BUILD_DIR/distribution.xml" \

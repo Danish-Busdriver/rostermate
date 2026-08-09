@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "1.14.0"
+  #define AppVersion "1.15.0"
 #endif
 
 #define AppName "RosterMate"
@@ -39,6 +39,7 @@ Name: "danish"; MessagesFile: "compiler:Languages\Danish.isl"
 
 [Files]
 Source: "..\..\*.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\telemetry-config.example.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\*-windows.cmd"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\*-windows.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\.env.example"; DestDir: "{app}"; Flags: ignoreversion
@@ -58,7 +59,6 @@ Name: "{userdesktop}\RosterMate"; Filename: "{app}\run-windows.cmd"; WorkingDir:
 Name: "desktopicon"; Description: "Opret en genvej på skrivebordet"; GroupDescription: "Ekstra genveje:"; Flags: unchecked
 
 [Run]
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-windows.ps1"""; WorkingDir: "{app}"; StatusMsg: "Installerer RosterMate og browserkomponenter..."; Flags: waituntilterminated
 Filename: "{app}\run-windows.cmd"; Description: "Start RosterMate"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
@@ -67,3 +67,25 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Fil
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\.venv"
 Type: files; Name: "{app}\.env"
+
+[Code]
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    WizardForm.StatusLabel.Caption := 'Installerer RosterMate og browserkomponenter...';
+    if not Exec(
+      ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+      ExpandConstant('-NoProfile -ExecutionPolicy Bypass -File "{app}\install-windows.ps1"'),
+      ExpandConstant('{app}'),
+      SW_HIDE,
+      ewWaitUntilTerminated,
+      ResultCode
+    ) then
+      RaiseException('RosterMate-installationsscriptet kunne ikke startes.');
+    if ResultCode <> 0 then
+      RaiseException(Format('RosterMate-installationen fejlede med kode %d.', [ResultCode]));
+  end;
+end;
