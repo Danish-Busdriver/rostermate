@@ -12,11 +12,11 @@ import threading
 import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
 
-from flask import Flask, abort, jsonify, redirect, render_template_string, request, send_file, session, url_for
+from flask import Flask, Response, abort, jsonify, redirect, render_template_string, request, send_file, session, url_for
 
 from automatic_sync import (
     LAST_ATTEMPT_KEY,
@@ -26,6 +26,7 @@ from automatic_sync import (
     schedule_summary,
 )
 from dashboard import should_show_first_run, should_show_welcome_back
+from error_log import classify_error, read_recent_errors, record_diagnostic, record_error, split_recent_entries
 from credentials import get_password, set_password
 from launch_agent import sync_launch_agent_preference
 from installer_update import InstallerUpdateError, download_and_launch_installer
@@ -33,6 +34,7 @@ from login import launch_authenticated_context, login_manager, read_stable_page_
 from notifications import send_change_notification
 from port_config import configured_port, port_is_available, save_port, valid_port
 from release_update import check_for_release_update
+from runtime_diagnostics import collect_runtime_diagnostics
 from session_store import SelfServiceSessionStore
 from settings import apply_wizard_preferences, with_setup_defaults
 from sync import build_sync_preview, fetch_status_is_error, run_initial_sync as run_initial_sync_core
@@ -69,8 +71,9 @@ SCHEDULE_PATH = OUTPUT_DIR / "schedule.json"
 EVENTS_STORE_PATH = OUTPUT_DIR / "events_store.json"
 CHANGES_PATH = OUTPUT_DIR / "changes.json"
 ICS_PATH = OUTPUT_DIR / "vagter.ics"
+ERROR_LOG_PATH = STORAGE_ROOT / "logs" / "errors.jsonl"
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.15.0"
+APP_VERSION = "1.16.0"
 SYNC_LOCKS: dict[str, threading.Lock] = {}
 SYNC_LOCKS_GUARD = threading.Lock()
 
@@ -92,8 +95,77 @@ def enqueue_sync_heartbeat() -> threading.Thread:
 def run_initial_sync(*args: Any, **kwargs: Any) -> dict[str, Any]:
     try:
         return run_initial_sync_core(*args, **kwargs)
+    except Exception as exc:
+        record_error(ERROR_LOG_PATH, "sync", exc, {"category": classify_error(exc)})
+        raise
     finally:
         enqueue_sync_heartbeat()
+
+
+def start_background_sync_flow(
+    driver_id: str,
+    settings: dict[str, Any],
+    history_prefix: str,
+    fetcher: Callable[[int, str], tuple[list[dict[str, Any]], str]],
+):
+    flow = login_manager.start_background(driver_id)
+    login_manager.update(flow.flow_id, state="syncing", message="⟳ Synkroniserer…")
+    thread = threading.Thread(
+        target=_run_background_sync_flow,
+        args=(flow.flow_id, driver_id, settings, history_prefix, fetcher),
+        name="rostermate-manual-sync",
+        daemon=True,
+    )
+    thread.start()
+    return flow
+
+
+def _run_background_sync_flow(
+    flow_id: str,
+    driver_id: str,
+    settings: dict[str, Any],
+    history_prefix: str,
+    fetcher: Callable[[int, str], tuple[list[dict[str, Any]], str]],
+) -> None:
+    paths = get_driver_paths(driver_id)
+    sync_lock = driver_sync_lock(driver_id)
+    if not sync_lock.acquire(blocking=False):
+        login_manager.update(flow_id, state="error", message="En synkronisering kører allerede.")
+        return
+    try:
+        had_existing_events = bool(load_json(paths["events_store_path"], []))
+        login_manager.update(flow_id, state="syncing", message="Henter vagter fra SelfService…")
+        result = run_initial_sync(
+            driver_id,
+            settings,
+            paths,
+            fetcher,
+            sync_schedule,
+            write_outputs,
+            load_json,
+            load_history,
+            save_history,
+            history_prefix,
+        )
+        save_driver_settings(driver_id, {**settings, "selfservice_session_verified": True})
+        notify_if_schedule_changed(settings, result["changes"], had_existing_events=had_existing_events)
+        login_manager.update(
+            flow_id,
+            state="synced",
+            message=result["message"],
+            payload={
+                "sync_complete": True,
+                "preview": result["preview"],
+                "count": result["count"],
+                "events": len(result["events"]),
+            },
+        )
+    except Exception as exc:
+        record_error(ERROR_LOG_PATH, "background-sync", exc, {"driver_id": driver_id})
+        save_driver_settings(driver_id, {**settings, "selfservice_session_verified": False})
+        login_manager.update(flow_id, state="error", message=compact_error_message(exc))
+    finally:
+        sync_lock.release()
 
 
 def driver_sync_lock(driver_id: str) -> threading.Lock:
@@ -104,14 +176,11 @@ def driver_sync_lock(driver_id: str) -> threading.Lock:
 def fetch_schedule_with_retry(days_ahead: int, driver_id: str, attempts: int = 2) -> tuple[list[dict[str, Any]], str]:
     last_result: tuple[list[dict[str, Any]], str] = ([], "SelfService kunne ikke kontaktes")
     for attempt in range(max(1, attempts)):
-        # Tide rejects otherwise valid sessions in Chromium's true headless
-        # mode. Use a normal browser offscreen so saved login state can be
-        # reused without displaying a window to the user.
+        # Reuse the saved session in a browser process without opening a window.
         last_result = fetch_selfservice_schedule(
             days_ahead,
             driver_id,
-            headless=False,
-            hide_window=True,
+            headless=True,
         )
         events, message = last_result
         if events or not fetch_status_is_error(message):
@@ -399,6 +468,7 @@ def driver_urls(driver_id: str) -> dict[str, str]:
         "sync_url": f"{base_path}/sync",
         "settings_post_url": f"{base_path}/settings",
         "install_update_url": f"{base_path}/install-update",
+        "error_report_url": f"{base_path}/error-report",
         "admin_url": f"{base_path}/admin",
         "calendar_url": f"{base_path}/calendar.ics",
     }
@@ -742,10 +812,41 @@ def sync_schedule(
     target_dir = output_dir or OUTPUT_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    # SelfService is authoritative inside the requested window. Replace that
-    # section completely so changed or removed duties cannot survive as stale
-    # calendar entries. Outside the window, preserve history unless the user
-    # explicitly asks to remove old shifts.
+    # SelfService is authoritative inside the requested window. Compare before
+    # replacing that section so additions, removals, and changed times are kept.
+    old_by_shift: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    new_by_shift: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for event in existing_events:
+        event_date = str(event.get("date", ""))
+        if _is_in_window(event_date, window_start, window_end):
+            identity = (event_date, str(event.get("title") or event.get("id") or "Ukendt"))
+            old_by_shift.setdefault(identity, []).append(event)
+    for event in new_events:
+        event_date = str(event.get("date", ""))
+        if _is_in_window(event_date, window_start, window_end):
+            identity = (event_date, str(event.get("title") or event.get("id") or "Ukendt"))
+            new_by_shift.setdefault(identity, []).append(event)
+
+    changes: list[dict[str, Any]] = []
+    for identity in sorted(set(old_by_shift) | set(new_by_shift)):
+        old_shifts = sorted(old_by_shift.get(identity, []), key=lambda item: str(item.get("start", "")))
+        new_shifts = sorted(new_by_shift.get(identity, []), key=lambda item: str(item.get("start", "")))
+        paired_count = min(len(old_shifts), len(new_shifts))
+        for old_event, new_event in zip(old_shifts[:paired_count], new_shifts[:paired_count]):
+            comparable_fields = ("title", "date", "start", "end", "all_day")
+            if any(old_event.get(field) != new_event.get(field) for field in comparable_fields):
+                changes.append({"type": "changed", "id": new_event.get("id"), "old": old_event, "new": new_event})
+        changes.extend(
+            {"type": "removed", "id": event.get("id"), "item": event}
+            for event in old_shifts[paired_count:]
+        )
+        changes.extend(
+            {"type": "added", "id": event.get("id"), "item": event}
+            for event in new_shifts[paired_count:]
+        )
+
+    # Outside the window, preserve history unless the user explicitly asks to
+    # remove old shifts.
     preserved_events = (
         []
         if remove_old_shifts
@@ -764,7 +865,6 @@ def sync_schedule(
             seen_ids.add(event_id)
     updated_events.sort(key=lambda event: (str(event.get("date", "")), str(event.get("start", ""))))
 
-    changes: list[dict[str, Any]] = []
     return updated_events, changes
 
 
@@ -990,17 +1090,24 @@ def navigate_selfservice_month(page: Any, target_year: int, target_month: int) -
         if not clicked:
             raise RuntimeError("SelfService viste ingen brugbar månedsnavigation")
 
-        page.wait_for_function(
-            """previous => {
-                const calendar = document.querySelector('#Calendar');
-                return calendar && (
-                    Number(calendar.dataset.year) !== previous.year
-                    || Number(calendar.dataset.month) !== previous.month
-                );
-            }""",
-            arg={"year": current[0], "month": current[1]},
-            timeout=30000,
-        )
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            try:
+                calendar = page.locator("#Calendar")
+                displayed_year = int(calendar.get_attribute("data-year") or 0)
+                displayed_month = int(calendar.get_attribute("data-month") or 0)
+                if (displayed_year, displayed_month) == target:
+                    break
+            except Exception:
+                pass
+            try:
+                page.wait_for_timeout(250)
+            except Exception:
+                time.sleep(0.25)
+        else:
+            raise RuntimeError(
+                f"SelfService skiftede ikke til {target_month:02d}/{target_year} efter månedsvalget"
+            )
         try:
             page.wait_for_selector("#Loading", state="hidden", timeout=15000)
         except Exception:
@@ -1084,6 +1191,7 @@ def fetch_selfservice_schedule(
     headless: bool = True,
     hide_window: bool = False,
 ) -> tuple[list[dict[str, Any]], str]:
+    started_at = time.monotonic()
     paths = get_driver_paths(driver_id)
     settings = load_settings(driver_id)
     session_store = SelfServiceSessionStore.from_paths(driver_id, paths)
@@ -1233,6 +1341,16 @@ def fetch_selfservice_schedule(
                 browser.close()
 
     except Exception as exc:
+        record_error(
+            ERROR_LOG_PATH,
+            "selfservice-fetch",
+            exc,
+            {
+                "driver_id": driver_id,
+                "category": classify_error(exc),
+                "duration_seconds": round(time.monotonic() - started_at, 2),
+            },
+        )
         return [], f"Fejl ved henting af schedule: {str(exc)}"
 
     if not html_pages:
@@ -1244,6 +1362,16 @@ def fetch_selfservice_schedule(
     events = parse_selfservice_calendar_pages(html_pages, today, today + timedelta(days=days_ahead))
     if not events:
         return [], "Ingen vagter fundet i kalenderen - muligvis ingen vagter planlagt"
+    record_diagnostic(
+        ERROR_LOG_PATH,
+        "sync-timing",
+        {
+            "driver_id": driver_id,
+            "duration_seconds": round(time.monotonic() - started_at, 2),
+            "months": len(html_pages),
+            "events": len(events),
+        },
+    )
     return events, f"Synkronisering gennemført - {len(events)} vagter hentet"
 
 
@@ -1397,6 +1525,12 @@ def run_automatic_sync_cycle(now: datetime | None = None) -> list[dict[str, str]
                 )
             except Exception as exc:
                 error_message = compact_error_message(exc)
+                record_error(
+                    ERROR_LOG_PATH,
+                    "automatic-sync",
+                    exc,
+                    {"driver_id": driver_id, "slot": slot},
+                )
                 history = load_history(paths["history_path"])
                 history.append({
                     "timestamp": current.isoformat(),
@@ -1445,6 +1579,7 @@ def automatic_sync_worker(stop_event: threading.Event, interval_seconds: int = 3
         try:
             run_automatic_sync_cycle()
         except Exception as exc:
+            record_error(ERROR_LOG_PATH, "automatic-sync-worker", exc)
             print(f"[RosterMate automatic sync] {exc}", file=sys.stderr, flush=True)
         stop_event.wait(interval_seconds)
 
@@ -1696,51 +1831,20 @@ def wizard_status(driver_id: str) -> tuple[Any, int]:
         return jsonify({"status": "error", "state": "error", "message": "Ukendt wizard-flow"}), 404
 
     if flow.state == "connected" and not flow.payload.get("sync_complete"):
-        sync_lock = driver_sync_lock(safe_driver_id)
-        if not sync_lock.acquire(blocking=False):
-            return jsonify({
-                "status": "ok",
-                "state": "syncing",
-                "message": "Synkroniseringen fortsætter i baggrunden…",
-            }), 200
+        settings = load_settings(safe_driver_id)
+        initial_fetch = flow.payload.get("initial_fetch")
+        fetcher = (
+            (lambda _days, _driver_id: initial_fetch)
+            if isinstance(initial_fetch, tuple) and len(initial_fetch) == 2
+            else fetch_schedule_with_retry
+        )
         login_manager.update(flow_id, state="syncing", message="⟳ Synkroniserer…")
-        try:
-            settings = load_settings(safe_driver_id)
-            initial_fetch = flow.payload.get("initial_fetch")
-            fetcher = (
-                (lambda _days, _driver_id: initial_fetch)
-                if isinstance(initial_fetch, tuple) and len(initial_fetch) == 2
-                else fetch_schedule_with_retry
-            )
-            result = run_initial_sync(
-                safe_driver_id,
-                settings,
-                paths,
-                fetcher,
-                sync_schedule,
-                write_outputs,
-                load_json,
-                load_history,
-                save_history,
-            )
-        except Exception as exc:
-            save_driver_settings(safe_driver_id, {**settings, "selfservice_session_verified": False})
-            flow = login_manager.update(flow_id, state="error", message=str(exc))
-        else:
-            save_driver_settings(safe_driver_id, {**settings, "selfservice_session_verified": True})
-            flow = login_manager.update(
-                flow_id,
-                state="synced",
-                message=result["message"],
-                payload={
-                    "sync_complete": True,
-                    "preview": result["preview"],
-                    "count": result["count"],
-                    "events": len(result["events"]),
-                },
-            )
-        finally:
-            sync_lock.release()
+        threading.Thread(
+            target=_run_background_sync_flow,
+            args=(flow_id, safe_driver_id, settings, "Synkronisering", fetcher),
+            name="rostermate-wizard-sync",
+            daemon=True,
+        ).start()
 
     current = login_manager.get(flow_id)
     if current is None:
@@ -2691,6 +2795,11 @@ def index(driver_id: str) -> str:
                                     <div style="margin-top:0.8rem;"><a class="button-link ghost" href="{{ urls.history_url }}">Vis log</a></div>
                                 </div>
                                 <div class="quick-card">
+                                    <strong>Fejlrapport</strong>
+                                    <div class="small">Hent en lokal rapport med runtime-status og seneste fejl.</div>
+                                    <div style="margin-top:0.8rem;"><a class="button-link ghost" href="{{ urls.error_report_url }}">Hent rapport</a></div>
+                                </div>
+                                <div class="quick-card">
                                     <strong>ICS eksport</strong>
                                     <div class="small">{{ 'Kalenderfilen er klar til brug.' if ics_ready else 'Kalenderfilen oprettes efter første sync.' }}</div>
                                     <div style="margin-top:0.8rem;"><a class="button-link ghost" href="{{ urls.calendar_url }}">Åbn fil</a></div>
@@ -2742,6 +2851,7 @@ def index(driver_id: str) -> str:
         needs_selfservice_setup=needs_selfservice_setup,
         update_status=update_status,
         automatic_status=automatic_status,
+        recent_errors=recent_errors,
         show_admin=telemetry_client().admin_configured(),
         platform_labels=ui_platform_labels(),
     )
@@ -2816,6 +2926,25 @@ def sync_route(driver_id: str) -> tuple[Any, int]:
         "remove_old_shifts": request.form.get("remove_old_shifts") == "true",
     }
     save_driver_settings(safe_driver_id, updated_settings)
+    session_store = SelfServiceSessionStore.from_paths(safe_driver_id, paths)
+    if session_store.has_saved_session():
+        flow = start_background_sync_flow(
+            safe_driver_id,
+            updated_settings,
+            "Synkronisering",
+            lambda requested_days, requested_driver: fetch_selfservice_schedule(
+                requested_days,
+                requested_driver,
+                allow_credential_login=True,
+                headless=True,
+            ),
+        )
+        return jsonify({
+            "status": "ok",
+            "flow_id": flow.flow_id,
+            "status_url": url_for("wizard_status", driver_id=safe_driver_id, flow_id=flow.flow_id),
+            "message": "Synkronisering startet i baggrunden.",
+        }), 202
     sync_lock = driver_sync_lock(safe_driver_id)
     if not sync_lock.acquire(blocking=False):
         return jsonify({
@@ -2827,8 +2956,7 @@ def sync_route(driver_id: str) -> tuple[Any, int]:
             days_ahead,
             safe_driver_id,
             allow_credential_login=True,
-            headless=False,
-            hide_window=True,
+            headless=True,
         )
         if saved_events:
             had_existing_events = bool(load_json(paths["events_store_path"], []))
@@ -2859,10 +2987,15 @@ def sync_route(driver_id: str) -> tuple[Any, int]:
                 "events": result["events"],
                 "changes": result["changes"],
             }), 200
+    except Exception as exc:
+        record_error(ERROR_LOG_PATH, "manual-sync", exc, {"driver_id": safe_driver_id})
+        return jsonify({
+            "status": "error",
+            "message": f"Synkronisering fejlede: {compact_error_message(exc)}",
+        }), 500
     finally:
         sync_lock.release()
 
-    session_store = SelfServiceSessionStore.from_paths(safe_driver_id, paths)
     flow = login_manager.start(
         safe_driver_id,
         updated_settings["url"],
@@ -2903,6 +3036,7 @@ def settings_page(driver_id: str) -> str:
     app_port = application_port()
     telemetry = telemetry_client()
     telemetry_state = telemetry.load_state()
+    recent_errors, recent_sync_timings = split_recent_entries(read_recent_errors(ERROR_LOG_PATH, limit=20))
     return render_template_string(
         """
         <!doctype html>
@@ -3327,9 +3461,30 @@ def settings_page(driver_id: str) -> str:
                             </div>
                             <div class="section span-2">
                                 <h2>Anonym brugsstatistik</h2>
-                                <div class="small">Hjælp med at vise, hvor mange installationer der er aktive. Efter hver manuel eller planlagt synkronisering sender RosterMate et tilfældigt installations-ID, appversion og operativsystem. Der sendes aldrig navn, chaufførnummer, login eller kalenderdata.</div>
+                                <div class="small">Hjælp med at vise, hvor mange installationer der er aktive. Funktionen er slået til som standard og kan altid fravælges. Efter hver manuel eller planlagt synkronisering sender RosterMate et tilfældigt installations-ID, appversion og operativsystem. Der sendes aldrig navn, chaufførnummer, login eller kalenderdata.</div>
                                 <label class="row"><input type="checkbox" name="anonymous_usage_enabled" value="true" {% if telemetry_state.enabled %}checked{% endif %}> Del anonym brugsstatistik</label>
                                 {% if not telemetry_configured %}<div class="field-hint">Funktionen bliver aktiv, når telemetri-serveren er konfigureret i den installerede udgave.</div>{% endif %}
+                            </div>
+                            <div class="section span-2">
+                                <h2>Fejlfinding</h2>
+                                <div class="small">Fejl og tekniske sync-målinger gemmes lokalt. Rapporten indeholder ikke SelfService-adgangskode eller tokens.</div>
+                                <div class="inline-actions" style="margin-top:0.8rem;">
+                                    <a class="ghost-button" href="{{ urls.error_report_url }}">Hent fejlrapport</a>
+                                </div>
+                                {% if recent_errors %}
+                                <div class="field-hint" style="margin-top:0.8rem;"><strong>Seneste fejl</strong></div>
+                                {% for error in recent_errors %}
+                                <div class="field-hint">{{ error.timestamp[:19].replace('T', ' ') }} · {{ error.category }} · {{ error.message }}</div>
+                                {% endfor %}
+                                {% else %}
+                                <div class="field-hint" style="margin-top:0.8rem;">Ingen registrerede fejl.</div>
+                                {% endif %}
+                                {% if recent_sync_timings %}
+                                <div class="field-hint" style="margin-top:0.8rem;"><strong>Seneste sync-tider</strong></div>
+                                {% for timing in recent_sync_timings %}
+                                <div class="field-hint">{{ timing.timestamp[:19].replace('T', ' ') }} · {{ timing.context.get('duration_seconds', '?') }} sek. · {{ timing.context.get('months', '?') }} måneder · {{ timing.context.get('events', '?') }} vagter</div>
+                                {% endfor %}
+                                {% endif %}
                             </div>
                         </div>
                         <div class="helper-links">
@@ -3353,6 +3508,8 @@ def settings_page(driver_id: str) -> str:
         app_port=app_port,
         automatic_schedule=schedule_summary(settings),
         telemetry_state=telemetry_state,
+        recent_errors=recent_errors,
+        recent_sync_timings=recent_sync_timings,
         telemetry_configured=telemetry.configured(),
         show_admin=telemetry.admin_configured(),
     )
@@ -3465,7 +3622,7 @@ def admin_page(driver_id: str) -> str:
         .hero{padding:1.5rem;border-radius:24px;background:linear-gradient(120deg,#10213c,#17355f 62%,#0f766e);color:#fff;margin-bottom:1rem}.hero h1{margin:0 0 .4rem}.hero p{margin:0;opacity:.84}.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem}.card,.panel{background:var(--panel);border:1px solid var(--border);border-radius:20px;padding:1.2rem}.card span{color:var(--muted);font-size:.9rem}.card strong{display:block;font-size:2rem;margin-top:.35rem}.grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem}.panel h2{margin-top:0}.row{display:flex;justify-content:space-between;padding:.65rem 0;border-bottom:1px solid var(--border)}.row:last-child{border:0}.error{background:#fce9e7;color:#b42318;padding:1rem;border-radius:16px;margin-bottom:1rem}.chart{height:180px;display:flex;align-items:flex-end;gap:5px;margin-top:1rem;padding-top:1rem;border-bottom:1px solid var(--border)}.bar{flex:1;min-width:4px;background:linear-gradient(180deg,#14b8a6,#10213c);border-radius:6px 6px 0 0;position:relative}.bar:hover:after{content:attr(data-label);position:absolute;bottom:calc(100% + 7px);left:50%;transform:translateX(-50%);background:#10213c;color:#fff;padding:.35rem .5rem;border-radius:8px;white-space:nowrap;font-size:.76rem;z-index:2}.chart-note{color:var(--muted);font-size:.86rem;margin:.65rem 0 0}@media(max-width:760px){.cards{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}}
         </style></head><body><main class="container">
         <div class="topbar"><div class="brand"><img src="/static/Rostermate.png" alt="RosterMate logo"><span>RosterMate Admin</span></div><nav class="nav"><a href="{{ urls.dashboard_url }}">Dashboard</a><a href="{{ urls.settings_url }}">Indstillinger</a><a href="{{ urls.history_url }}">Historik</a><a class="active" href="{{ urls.admin_url }}">Admin</a></nav></div>
-        <section class="hero"><h1>Aktive installationer</h1><p>Anonyme livstegn fra installationer, der frivilligt har slået brugsstatistik til.</p></section>
+        <section class="hero"><h1>Aktive installationer</h1><p>Anonyme livstegn fra installationer, hvor brugsstatistik ikke er fravalgt.</p></section>
         {% if error %}<div class="error">Telemetri-serveren kunne ikke kontaktes: {{ error }}</div>{% endif %}
         <section class="cards"><div class="card"><span>Seneste 7 dage</span><strong>{{ stats.active_7_days }}</strong></div><div class="card"><span>Seneste 30 dage</span><strong>{{ stats.active_30_days }}</strong></div><div class="card"><span>Seneste 90 dage</span><strong>{{ stats.active_90_days }}</strong></div><div class="card"><span>Registreret i alt</span><strong>{{ stats.total }}</strong></div></section>
         <section class="cards" style="margin-top:1rem"><div class="card"><span>Nye · 7 dage</span><strong>{{ stats.new_7_days }}</strong></div><div class="card"><span>Nye · 30 dage</span><strong>{{ stats.new_30_days }}</strong></div><div class="card"><span>På version {{ app_version }}</span><strong>{{ current_version_count }}</strong></div><div class="card"><span>Opdateret · 30 dage</span><strong>{{ version_adoption }}%</strong></div></section>
@@ -3723,6 +3880,36 @@ def backup(driver_id: str) -> tuple[Any, int]:
 def health() -> tuple[Any, int]:
     ensure_storage()
     return jsonify({"status": "ok", "version": APP_VERSION}), 200
+
+
+@app.route("/<driver_id>/error-report")
+def error_report(driver_id: str) -> Response:
+    safe_driver_id = normalize_driver_id(driver_id)
+    diagnostics = collect_runtime_diagnostics()
+    entries = read_recent_errors(ERROR_LOG_PATH, limit=20)
+    lines = [
+        "RosterMate lokal fejlrapport",
+        f"Version: {APP_VERSION}",
+        f"Profil: {safe_driver_id}",
+        "",
+        "Runtime:",
+    ]
+    lines.extend(f"{key}: {value}" for key, value in diagnostics.items())
+    lines.extend(["", "Seneste fejl:"])
+    if not entries:
+        lines.append("Ingen registrerede fejl.")
+    else:
+        for entry in entries:
+            lines.append(
+                f"{entry.get('timestamp', '')} | {entry.get('component', '')} | "
+                f"{entry.get('category', entry.get('event_type', ''))} · "
+                f"{entry.get('error_type', '')}: {entry.get('message', entry.get('context', ''))}"
+            )
+    return Response(
+        "\n".join(lines) + "\n",
+        mimetype="text/plain",
+        headers={"Content-Disposition": "attachment; filename=rostermate-error-report.txt"},
+    )
 
 
 if __name__ == "__main__":

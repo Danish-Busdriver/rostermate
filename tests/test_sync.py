@@ -22,7 +22,7 @@ def test_background_fetch_uses_offscreen_headed_browser(monkeypatch):
 
     assert events == [{"id": "shift"}]
     assert status == "ok"
-    assert calls == [(30, "1234", {"headless": False, "hide_window": True})]
+    assert calls == [(30, "1234", {"headless": True})]
 
 
 def test_build_event_from_shift_handles_regular_and_all_day_shifts():
@@ -491,7 +491,7 @@ def test_sync_schedule_preserves_events_outside_selected_window(tmp_path):
 
     assert any(event["id"] == "old-event" for event in updated_events)
     assert any(event["id"] == "new-event" for event in updated_events)
-    assert changes == []
+    assert [(change["type"], change["item"]["id"]) for change in changes] == [("added", "new-event")]
 
 
 def test_sync_schedule_can_remove_events_outside_selected_window(tmp_path):
@@ -553,6 +553,32 @@ def test_sync_schedule_does_not_duplicate_existing_events(tmp_path):
     assert len(updated_events) == 1
     assert updated_events[0]["id"] == "same-event"
     assert changes == []
+
+
+def test_sync_schedule_registers_changed_shift_time(tmp_path):
+    old_event = build_event_from_shift({"id": "Ops3", "from": "09:05", "to": "16:54"}, "2026-08-05")
+    new_event = build_event_from_shift({"id": "Ops3", "from": "10:05", "to": "17:54"}, "2026-08-05")
+
+    updated_events, changes = sync_schedule(
+        [old_event], [new_event], "2026-08-01", "2026-08-31", False, tmp_path
+    )
+
+    assert updated_events == [new_event]
+    assert len(changes) == 1
+    assert changes[0]["type"] == "changed"
+    assert changes[0]["old"]["start"] == "2026-08-05T09:05:00"
+    assert changes[0]["new"]["start"] == "2026-08-05T10:05:00"
+
+
+def test_sync_schedule_registers_removed_shift_in_window(tmp_path):
+    old_event = build_event_from_shift({"id": "Ops3", "from": "09:05", "to": "16:54"}, "2026-08-05")
+
+    updated_events, changes = sync_schedule(
+        [old_event], [], "2026-08-01", "2026-08-31", False, tmp_path
+    )
+
+    assert updated_events == []
+    assert [(change["type"], change["item"]["id"]) for change in changes] == [("removed", old_event["id"])]
 
 
 def test_sync_schedule_replaces_stale_events_inside_next_month_window(tmp_path):

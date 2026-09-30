@@ -4,6 +4,11 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+PYTHON_RUNNER=()
+if [ "$(uname -m)" = "arm64" ]; then
+  PYTHON_RUNNER=(arch -arm64)
+fi
+
 PYTHON_VERSION="3.14.6"
 PYTHON_CMD=""
 
@@ -31,18 +36,18 @@ APPLESCRIPT
   PYTHON_CMD="/Library/Frameworks/Python.framework/Versions/3.14/bin/python3"
 fi
 
-if [ ! -f ".venv/pyvenv.cfg" ] || [ ! -x ".venv/bin/python3" ] || ! .venv/bin/python3 -c 'import sys; raise SystemExit(0 if sys.prefix != sys.base_prefix else 1)' 2>/dev/null; then
+if [ ! -f ".venv/pyvenv.cfg" ] || [ ! -x ".venv/bin/python3" ] || ! "${PYTHON_RUNNER[@]}" .venv/bin/python3 -c 'import sys; raise SystemExit(0 if sys.prefix != sys.base_prefix else 1)' 2>/dev/null || ! "${PYTHON_RUNNER[@]}" .venv/bin/python3 -c 'from PIL import Image' 2>/dev/null || ! "${PYTHON_RUNNER[@]}" .venv/bin/python3 -c 'from playwright.sync_api import sync_playwright; playwright = sync_playwright().start(); playwright.stop()' 2>/dev/null; then
   if [ -e ".venv" ]; then
     echo "Fjerner et ufuldstændigt virtuelt miljø..."
     rm -rf "$SCRIPT_DIR/.venv"
   fi
   echo "Opretter virtuelt miljø..."
-  "$PYTHON_CMD" -m venv .venv
+  "${PYTHON_RUNNER[@]}" "$PYTHON_CMD" -m venv .venv
 fi
 
-.venv/bin/python3 -m pip install --upgrade pip
-.venv/bin/python3 -m pip install -r requirements.txt
-.venv/bin/python3 -m playwright install chromium
+"${PYTHON_RUNNER[@]}" .venv/bin/python3 -m pip install --upgrade --no-cache-dir --only-binary=:all: pip
+"${PYTHON_RUNNER[@]}" .venv/bin/python3 -m pip install --no-cache-dir --force-reinstall --only-binary=:all: -r requirements.txt
+"${PYTHON_RUNNER[@]}" .venv/bin/python3 -m playwright install chromium
 
 if [ ! -f .env ]; then
   cp .env.example .env

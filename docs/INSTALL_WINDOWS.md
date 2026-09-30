@@ -10,7 +10,7 @@ Windows-udgaven bruger samme dashboard, SelfService-synkronisering, profiler, hi
 
 ## Anbefalet installation
 
-1. Download `RosterMate-1.15.0-Windows-Setup.exe` fra den seneste GitHub Release.
+1. Download `RosterMate-1.16.0-Windows-Setup.exe` fra den seneste GitHub Release.
 2. Dobbeltklik på installationsfilen.
 3. Vælg eventuelt en skrivebordsgenvej og gennemfør guiden.
 4. Lad installationsprogrammet hente Python, RosterMates afhængigheder og Chromium.
@@ -155,7 +155,7 @@ $env:ROSTERMATE_SKIP_UPDATE = "1"
 
 Alle installationstyper kontrollerer GitHub Releases højst én gang i døgnet. Hvis en nyere version findes, viser dashboardet versionsnummeret og knappen **Hent og installér**. Et aktivt klik henter den aktuelle Windows `Setup.exe` og åbner Windows Setup. RosterMate kontrollerer først HTTPS-adresse, versionsbestemt filnavn, filstørrelse og installationsfilens filtype. Følg installationsprogrammet, og start RosterMate igen bagefter. Installationen startes aldrig uden brugerens klik og godkendelse. Resultatet af versionskontrollen gemmes lokalt, og RosterMate fortsætter normalt, hvis GitHub ikke kan kontaktes. Der sendes ingen profil-, chauffør- eller kalenderdata med kontrollen.
 
-Under **Indstillinger → Anonym brugsstatistik** kan du frivilligt dele et livstegn efter hver manuel eller planlagt synkronisering. Det indeholder kun et tilfældigt installations-ID, RosterMate-version og `Windows`. Funktionen er slået fra som standard og sender aldrig chaufførnummer, SelfService-login eller kalenderdata.
+Under **Indstillinger → Anonym brugsstatistik** kan du styre et anonymt livstegn efter hver manuel eller planlagt synkronisering. Det indeholder kun et tilfældigt installations-ID, RosterMate-version og `Windows`. Funktionen er slået til som standard, kan fravælges når som helst og sender aldrig chaufførnummer, SelfService-login eller kalenderdata.
 
 ## Test
 

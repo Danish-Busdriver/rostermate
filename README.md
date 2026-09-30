@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-blue" alt="macOS">
   <img src="https://img.shields.io/badge/platform-Windows-0078D4" alt="Windows">
-  <img src="https://img.shields.io/badge/version-1.15.0-00A9CE" alt="Version 1.15.0">
+  <img src="https://img.shields.io/badge/version-1.16.0-00A9CE" alt="Version 1.16.0">
   <img src="https://img.shields.io/badge/license-MIT-red" alt="MIT license">
 </p>
 
@@ -70,7 +70,7 @@ Herefter kan du altid synkronisere manuelt fra dashboardet. Automatisk sync ford
 
 [![RosterMate indstillinger](assets/screenshots/settings.png)](assets/screenshots/settings.png)
 
-Brugeren kan frivilligt dele anonym brugsstatistik. RosterMate sender da et livstegn efter hver manuel eller planlagt synkronisering med et tilfældigt installations-ID, appversion og operativsystem — aldrig chaufførnummer, login eller kalenderdata.
+Anonym brugsstatistik er slået til som standard og kan altid fravælges under Indstillinger. Efter hver manuel eller planlagt synkronisering sender RosterMate et livstegn med et tilfældigt installations-ID, appversion og operativsystem — aldrig chaufførnummer, login eller kalenderdata.
 
 ### Adminpanel
 
@@ -94,7 +94,7 @@ Det private adminpanel giver ejeren et samlet overblik over aktive og nye instal
 - [x] Daglig versionskontrol med hentning og start af platformens installationsprogram
 - [x] Direkte macOS PKG og Windows Setup.exe
 - [x] Afinstallation på begge platforme
-- [x] Frivillig anonym optælling af aktive installationer
+- [x] Anonym optælling af aktive installationer med mulighed for fravalg
 
 ### Næste versioner
 
@@ -110,8 +110,8 @@ Det private adminpanel giver ejeren et samlet overblik over aktive og nye instal
 
 ## Hent RosterMate
 
-- [RosterMate 1.15.0 til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.15.0-macOS.pkg)
-- [RosterMate 1.15.0 til Windows](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.15.0-Windows-Setup.exe)
+- [RosterMate 1.16.0 til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.16.0-macOS.pkg)
+- [RosterMate 1.16.0 til Windows](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.16.0-Windows-Setup.exe)
 
 Teknisk installation, fejlfinding og afinstallation findes i de separate vejledninger:
 

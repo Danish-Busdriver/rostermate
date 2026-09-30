@@ -175,6 +175,11 @@ def test_macos_app_bootstraps_first_install_and_checks_version():
     assert "Første installation kan tage et par minutter" in launcher
     run_script = (project_root / "run.command").read_text(encoding="utf-8")
     assert 'python3 tray.py --server-pid "$server_pid"' in run_script
+    install_script = (project_root / "install.command").read_text(encoding="utf-8")
+    assert "from PIL import Image" in install_script
+    assert "sync_playwright" in install_script
+    assert "arch -arm64" in install_script
+    assert "--only-binary=:all:" in install_script
     assert 'wait "$server_pid"' in launcher
     assert 'http://localhost:$PORT/"' in launcher
     assert (project_root / "uninstall.command").is_file()
@@ -242,3 +247,13 @@ def test_shared_automatic_scheduler_starts_through_both_platform_launchers():
     assert "start_automatic_sync_worker()" in app_source
     assert "python3 app.py" in macos_launcher
     assert '[sys.executable, "-u", "app.py"]' in windows_launcher
+
+
+def test_smoke_test_script_is_present_and_isolated():
+    project_root = Path(__file__).resolve().parents[1]
+    smoke_test = (project_root / "scripts" / "smoke_test.py").read_text(encoding="utf-8")
+
+    assert "ROSTERMATE_HOME" in smoke_test
+    assert "ROSTERMATE_PORT" in smoke_test
+    assert "/health" in smoke_test
+    assert "TemporaryDirectory" in smoke_test
