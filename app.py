@@ -2851,7 +2851,6 @@ def index(driver_id: str) -> str:
         needs_selfservice_setup=needs_selfservice_setup,
         update_status=update_status,
         automatic_status=automatic_status,
-        recent_errors=recent_errors,
         show_admin=telemetry_client().admin_configured(),
         platform_labels=ui_platform_labels(),
     )

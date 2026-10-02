@@ -5,6 +5,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from dashboard import should_show_first_run, should_show_welcome_back
 from session_store import SelfServiceSessionStore
+import app as app_module
 
 
 def session_store(tmp_path, *, saved: bool) -> SelfServiceSessionStore:
@@ -34,3 +35,26 @@ def test_existing_calendar_data_never_locks_user_in_first_run(tmp_path):
     store = session_store(tmp_path, saved=False)
 
     assert should_show_first_run({}, store, has_existing_data=True) is False
+
+
+def test_dashboard_renders_without_settings_only_diagnostics(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
+    monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
+    monkeypatch.setattr(app_module, "STORAGE_ROOT", tmp_path)
+    monkeypatch.setattr(
+        app_module,
+        "check_for_release_update",
+        lambda *_args, **_kwargs: {"available": False},
+    )
+    paths = app_module.get_driver_paths("1234")
+    app_module.save_driver_settings("1234", {"wizard_completed": True})
+    paths["selfservice_storage_state_path"].write_text('{"cookies":[]}', encoding="utf-8")
+    app_module.app.config["TESTING"] = True
+
+    with app_module.app.test_client() as client:
+        response = client.get("/1234/")
+
+    assert response.status_code == 200
+    assert b"Dashboard" in response.data
+    assert b"Seneste registrerede fejl" not in response.data
