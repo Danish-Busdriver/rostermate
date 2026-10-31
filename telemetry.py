@@ -66,9 +66,12 @@ class TelemetryClient:
     def load_state(self) -> dict[str, Any]:
         try:
             loaded = json.loads(self.state_path.read_text(encoding="utf-8"))
-            return loaded if isinstance(loaded, dict) else {}
+            if isinstance(loaded, dict):
+                loaded.setdefault("enabled", True)
+                return loaded
         except (OSError, json.JSONDecodeError):
-            return {}
+            pass
+        return {"enabled": True}
 
     def save_state(self, state: dict[str, Any]) -> None:
         self.state_path.parent.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,6 @@
 # Anonym brugsstatistik på Simply.com
 
-RosterMate kan sende et anonymt livstegn efter hver manuel eller planlagt synkronisering til en lille PHP/MySQL-tjeneste. Funktionen er frivillig og slået fra som standard.
+RosterMate kan sende et anonymt livstegn efter hver manuel eller planlagt synkronisering til en lille PHP/MySQL-tjeneste. Funktionen er slået til som standard på nye installationer og kan altid fravælges under Indstillinger. Et tidligere gemt fravalg bevares ved opdatering.
 
 ## Hvad registreres?
 
