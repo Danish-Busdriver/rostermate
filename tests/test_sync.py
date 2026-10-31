@@ -678,6 +678,74 @@ def test_software_info_exposes_version_and_survives_missing_git(tmp_path):
     assert info["updated_at"] == "ukendt"
 
 
+def test_software_info_runs_git_once_per_directory(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(app_module.subprocess, "run", lambda *a, **k: calls.append(a) or type("R", (), {"returncode": 1, "stdout": ""})())
+    app_module._SOFTWARE_INFO_CACHE.clear()
+
+    software_info(tmp_path)
+    software_info(tmp_path)
+
+    assert len(calls) == 2
+
+
+def test_close_browser_quietly_closes_both_and_ignores_errors():
+    closed = []
+
+    class Target:
+        def __init__(self, name, fail=False):
+            self.name, self.fail = name, fail
+
+        def close(self):
+            closed.append(self.name)
+            if self.fail:
+                raise RuntimeError("already closed")
+
+    app_module.close_browser_quietly(Target("browser"), Target("context", fail=True))
+    app_module.close_browser_quietly(None, None)
+
+    assert closed == ["context", "browser"]
+
+
+def test_fetch_closes_browser_when_calendar_fails(tmp_path, monkeypatch):
+    closed = []
+
+    class Closable:
+        def __init__(self, name):
+            self.name = name
+
+        def close(self):
+            closed.append(self.name)
+
+        def new_page(self):
+            raise RuntimeError("boom")
+
+    class Playwright:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
+    monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
+    monkeypatch.setattr(app_module, "ERROR_LOG_PATH", tmp_path / "errors.jsonl")
+    monkeypatch.setattr(
+        app_module,
+        "launch_authenticated_context",
+        lambda *_a, **_k: (Closable("browser"), Closable("context")),
+    )
+    monkeypatch.setattr("playwright.sync_api.sync_playwright", lambda: Playwright())
+    app_module.save_driver_settings("1234", {"url": "https://example.test"})
+
+    events, message = app_module.fetch_selfservice_schedule(7, "1234")
+
+    assert events == []
+    assert message.startswith("Fejl ved henting")
+    assert closed == ["context", "browser"]
+
+
 def test_list_driver_ids_only_returns_configured_numeric_profiles(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "DATA_DIR", tmp_path)
     (tmp_path / "12345").mkdir()

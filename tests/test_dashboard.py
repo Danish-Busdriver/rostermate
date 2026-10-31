@@ -58,3 +58,28 @@ def test_dashboard_renders_without_settings_only_diagnostics(tmp_path, monkeypat
     assert response.status_code == 200
     assert b"Dashboard" in response.data
     assert b"Seneste registrerede fejl" not in response.data
+
+
+def test_today_tomorrow_shows_shifts_and_marks_empty_days():
+    today = app_module.date(2026, 11, 3)
+    events = [
+        app_module.build_event_from_shift({"id": "Ops3", "from": "09:05", "to": "16:54"}, "2026-11-03"),
+    ]
+
+    cards = app_module.build_today_tomorrow(events, today)
+
+    assert [card["label"] for card in cards] == ["I dag", "I morgen"]
+    assert cards[0]["shifts"][0]["title"] == "Ops3"
+    assert cards[0]["shifts"][0]["time_label"] == "09:05 - 16:54"
+    assert cards[1]["shifts"] == []
+
+
+def test_change_description_shows_weekday_and_before_after():
+    old = app_module.build_event_from_shift({"id": "Ops3", "from": "09:05", "to": "16:54"}, "2026-11-04")
+    new = app_module.build_event_from_shift({"id": "Ops3", "from": "10:05", "to": "17:54"}, "2026-11-04")
+
+    described = app_module.describe_change({"type": "changed", "id": new["id"], "old": old, "new": new})
+
+    assert described["date_label"] == "Ons 04.11"
+    assert described["detail"] == "09:05 - 16:54 -> 10:05 - 17:54"
+    assert described["badge_text"] == "Opdateret"

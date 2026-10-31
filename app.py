@@ -10,6 +10,7 @@ import subprocess
 import sys
 import threading
 import time
+from contextlib import ExitStack
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -239,8 +240,13 @@ def normalize_driver_id(value: str) -> str:
     return driver_id
 
 
+_SOFTWARE_INFO_CACHE: dict[Path, dict[str, str]] = {}
+
+
 def software_info(project_dir: Path | None = None) -> dict[str, str]:
     root = project_dir or BASE_DIR
+    if root in _SOFTWARE_INFO_CACHE:
+        return dict(_SOFTWARE_INFO_CACHE[root])
     commit = "ukendt"
     updated_at = "ukendt"
     try:
@@ -264,7 +270,9 @@ def software_info(project_dir: Path | None = None) -> dict[str, str]:
             updated_at = format_timestamp(date_result.stdout.strip())
     except OSError:
         pass
-    return {"version": APP_VERSION, "commit": commit, "updated_at": updated_at}
+    info = {"version": APP_VERSION, "commit": commit, "updated_at": updated_at}
+    _SOFTWARE_INFO_CACHE[root] = info
+    return dict(info)
 
 
 def driver_storage_paths(driver_id: str) -> dict[str, Path]:
@@ -658,6 +666,20 @@ def build_upcoming_shift_cards(events: list[dict[str, Any]], week_start: date, w
     return grouped_days
 
 
+def build_today_tomorrow(events: list[dict[str, Any]], today: date | None = None) -> list[dict[str, Any]]:
+    current = today or date.today()
+    result = []
+    for offset, label in ((0, "I dag"), (1, "I morgen")):
+        day = current + timedelta(days=offset)
+        cards = build_upcoming_shift_cards(events, day, day)
+        result.append({
+            "label": label,
+            "date_label": day.strftime("%d.%m"),
+            "shifts": cards[0]["shifts"] if cards else [],
+        })
+    return result
+
+
 def select_next_calendar_events(
     events: list[dict[str, Any]],
     today: date | None = None,
@@ -707,6 +729,11 @@ def describe_change(change: dict[str, Any]) -> dict[str, str]:
     active_item = item or new_item or old_item
     title = extract_shift_name(str(active_item.get("title") or active_item.get("id") or identifier))
     date_label = str(active_item.get("date") or new_item.get("date") or old_item.get("date") or "")
+    try:
+        parsed_date = date.fromisoformat(date_label)
+        date_label = f"{['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'][parsed_date.weekday()]} {parsed_date:%d.%m}"
+    except ValueError:
+        pass
 
     if change_type == "changed":
         before_label = extract_time_label(old_item) if old_item else "Tid ukendt"
@@ -1183,6 +1210,16 @@ def perform_background_selfservice_login(page: Any, settings: dict[str, Any]) ->
         )
 
 
+def close_browser_quietly(browser: Any, context: Any) -> None:
+    for target in (context, browser):
+        if target is None:
+            continue
+        try:
+            target.close()
+        except Exception:
+            pass
+
+
 def fetch_selfservice_schedule(
     days_ahead: int,
     driver_id: str,
@@ -1204,13 +1241,14 @@ def fetch_selfservice_schedule(
 
     html_pages: list[str] = []
     try:
-        with sync_playwright() as p:
+        with sync_playwright() as p, ExitStack() as cleanup:
             browser, context = launch_authenticated_context(
                 p,
                 session_store,
                 headless=headless,
                 hide_window=hide_window,
             )
+            cleanup.callback(close_browser_quietly, browser, context)
             page = context.new_page()
             page.set_default_timeout(30000)
 
@@ -1932,6 +1970,7 @@ def index(driver_id: str) -> str:
     last_sync = format_timestamp(history[-1].get("timestamp") if history else None)
     next_events = select_next_calendar_events(events)
     upcoming_shifts = build_upcoming_shift_cards(next_events, date.today(), date.max)
+    today_tomorrow = build_today_tomorrow(events)
     dashboard_changes = [describe_change(change) for change in changes[:5]]
     history_count = len(history)
     ics_ready = paths["ics_path"].exists() and paths["ics_path"].stat().st_size > 0
@@ -2130,6 +2169,22 @@ def index(driver_id: str) -> str:
                 }
                 .hero-copy h1 { margin: 0 0 0.35rem; font-size: 2rem; }
                 .hero-copy p { margin: 0; opacity: 0.88; max-width: 56ch; }
+                .today-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+                    gap: 0.8rem;
+                    margin-bottom: 1rem;
+                }
+                .today-card {
+                    display: grid;
+                    gap: 0.15rem;
+                    padding: 0.9rem 1rem;
+                    border-radius: 18px;
+                    background: rgba(255, 255, 255, 0.14);
+                    border: 1px solid rgba(255, 255, 255, 0.22);
+                }
+                .today-card strong { font-size: 1.25rem; }
+                .today-label { font-size: 0.82rem; font-weight: 700; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.04em; }
                 .hero-meta {
                     display: flex;
                     flex-wrap: wrap;
@@ -2611,9 +2666,19 @@ def index(driver_id: str) -> str:
                 <div class="hero">
                     <div class="hero-shell">
                         <div class="hero-copy">
-                            <span class="pill">Driftsoversigt</span>
-                            <h1>Se næste vagter hurtigere og hold sync under kontrol.</h1>
-                            <p>Forsiden fokuserer nu på det daglige workflow: status, næste synkronisering, kommende vagter og de seneste ændringer.</p>
+                            <div class="today-grid">
+                                {% for day in today_tomorrow %}
+                                <div class="today-card">
+                                    <span class="today-label">{{ day.label }} · {{ day.date_label }}</span>
+                                    {% for shift in day.shifts %}
+                                    <strong>{{ shift.title }}</strong>
+                                    <span>{{ shift.time_label }}</span>
+                                    {% else %}
+                                    <strong>Ingen vagt registreret</strong>
+                                    {% endfor %}
+                                </div>
+                                {% endfor %}
+                            </div>
                             <div class="hero-meta">
                                 <div class="hero-chip">
                                     <strong>Status</strong>
@@ -2651,9 +2716,8 @@ def index(driver_id: str) -> str:
                             {% endif %}
                         </div>
                         <div class="hero-side">
-                            <strong>Hovedhandling</strong>
-                            <span>Synkronisér de næste {{ days_ahead }} dage</span>
-                            <p>Brug sync her og flyt konfiguration til indstillingssiden, så dashboardet forbliver enkelt.</p>
+                            <strong>Synkronisér</strong>
+                            <span>De næste {{ days_ahead }} dage</span>
                             <form onsubmit="handleFormSubmit(event, '{{ urls.sync_url }}')">
                                 <div class="field">
                                     <label for="days_ahead">Dage frem</label>
@@ -2780,7 +2844,6 @@ def index(driver_id: str) -> str:
                             <div class="card-head">
                                 <div>
                                     <h2>Hurtige handlinger</h2>
-                                    <p class="small">Sekundære funktioner er flyttet væk fra forsiden, men stadig lette at finde.</p>
                                 </div>
                             </div>
                             <div class="quick-actions">
@@ -2838,6 +2901,7 @@ def index(driver_id: str) -> str:
         remove_old_shifts=settings["remove_old_shifts"],
         event_count=len(events),
         upcoming_shifts=upcoming_shifts,
+        today_tomorrow=today_tomorrow,
         dashboard_changes=dashboard_changes,
         history_count=history_count,
         ics_ready=ics_ready,
