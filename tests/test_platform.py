@@ -249,6 +249,16 @@ def test_shared_automatic_scheduler_starts_through_both_platform_launchers():
     assert '[sys.executable, "-u", "app.py"]' in windows_launcher
 
 
+def test_installers_do_not_select_python_without_pillow_wheels():
+    project_root = Path(__file__).resolve().parents[1]
+    windows = (project_root / "install-windows.ps1").read_text(encoding="utf-8")
+    macos = (project_root / "install.command").read_text(encoding="utf-8")
+
+    assert "py.exe -3.14" in windows
+    assert windows.count("< (3, 15)") == 2
+    assert "< (3, 15)" in macos
+
+
 def test_smoke_test_script_is_present_and_isolated():
     project_root = Path(__file__).resolve().parents[1]
     smoke_test = (project_root / "scripts" / "smoke_test.py").read_text(encoding="utf-8")

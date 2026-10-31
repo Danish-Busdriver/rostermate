@@ -13,7 +13,7 @@ PYTHON_VERSION="3.14.6"
 PYTHON_CMD=""
 
 for candidate in /Library/Frameworks/Python.framework/Versions/3.14/bin/python3 python3 /usr/local/bin/python3.14 /opt/homebrew/bin/python3; do
-  if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)' 2>/dev/null; then
+  if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c 'import sys; raise SystemExit(0 if (3, 12) <= sys.version_info[:2] < (3, 15) else 1)' 2>/dev/null; then
     PYTHON_CMD="$(command -v "$candidate")"
     break
   fi

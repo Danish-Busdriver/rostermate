@@ -10,7 +10,7 @@ function Find-RosterMatePython {
     $Launcher = Get-Command py.exe -ErrorAction SilentlyContinue
     if ($Launcher) {
         try {
-            $PathFromLauncher = & py.exe -3 -c "import sys; print(sys.executable)" 2>$null
+            $PathFromLauncher = & py.exe -3.14 -c "import sys; print(sys.executable)" 2>$null
             if ($LASTEXITCODE -eq 0) { $Candidates += $PathFromLauncher }
         } catch {}
     }
@@ -20,7 +20,7 @@ function Find-RosterMatePython {
     )
     foreach ($Candidate in $Candidates) {
         if ($Candidate -and (Test-Path $Candidate)) {
-            & $Candidate -c "import sys; raise SystemExit(0 if sys.version_info[:3] >= (3, 14, 6) else 1)"
+            & $Candidate -c "import sys; raise SystemExit(0 if (3, 14, 6) <= sys.version_info[:3] < (3, 15) else 1)"
             if ($LASTEXITCODE -eq 0) { return $Candidate }
         }
     }
@@ -45,7 +45,7 @@ function Test-RosterMateVenv {
     $Python = Join-Path $ProjectDir ".venv\Scripts\python.exe"
     if (-not (Test-Path $Config) -or -not (Test-Path $Python)) { return $false }
     try {
-        & $Python -c "import sys; raise SystemExit(0 if sys.prefix != sys.base_prefix and sys.version_info[:3] >= (3, 14, 6) else 1)" 2>$null
+        & $Python -c "import sys; raise SystemExit(0 if sys.prefix != sys.base_prefix and (3, 14, 6) <= sys.version_info[:3] < (3, 15) else 1)" 2>$null
         return ($LASTEXITCODE -eq 0)
     } catch {
         return $false
