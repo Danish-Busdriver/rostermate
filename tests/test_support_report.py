@@ -117,3 +117,19 @@ def test_admin_report_page_is_hidden_without_admin_key(tmp_path, monkeypatch):
     app_module.app.config["TESTING"] = True
     with app_module.app.test_client() as client:
         assert client.get("/1234/admin/reports/1").status_code == 404
+
+
+def test_report_send_rejects_cross_site_requests(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(app_module, "ERROR_LOG_PATH", tmp_path / "errors.jsonl")
+    sent = []
+    monkeypatch.setattr(TelemetryClient, "send_error_report", lambda self, report: sent.append(report) or "1")
+    app_module.app.config["TESTING"] = True
+
+    with app_module.app.test_client() as client:
+        evil = client.post("/1234/report-problem", headers={"Origin": "https://evil.example"})
+        sneaky = client.post("/1234/push-test", headers={"Sec-Fetch-Site": "cross-site"})
+        own = client.post("/1234/report-problem", headers={"Origin": "http://localhost", "Sec-Fetch-Site": "same-origin"})
+
+    assert evil.status_code == 403 and sneaky.status_code == 403
+    assert own.status_code == 200 and len(sent) == 1

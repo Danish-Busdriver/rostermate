@@ -32,11 +32,17 @@ function ensure_report_table(PDO $pdo): void {
     if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
         $pdo->exec('CREATE TABLE IF NOT EXISTS rostermate_error_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, '
             . 'created_at TEXT NOT NULL, installation_hash TEXT NULL, platform TEXT NOT NULL, app_version TEXT NOT NULL, report TEXT NOT NULL)');
-        return;
-    }
+    } else {
     $pdo->exec('CREATE TABLE IF NOT EXISTS rostermate_error_reports ('
         . 'id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, created_at DATETIME NOT NULL, installation_hash CHAR(64) NULL, '
         . 'platform VARCHAR(16) NOT NULL, app_version VARCHAR(32) NOT NULL, report MEDIUMTEXT NOT NULL, '
         . 'INDEX idx_created_at (created_at), INDEX idx_installation (installation_hash)'
         . ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
+    }
+    // Tilføjet efter første udrulning; eksisterende tabeller får kolonnen her.
+    try {
+        $pdo->query('SELECT ip_hash FROM rostermate_error_reports LIMIT 0');
+    } catch (PDOException $e) {
+        $pdo->exec('ALTER TABLE rostermate_error_reports ADD COLUMN ip_hash CHAR(64) NULL');
+    }
 }

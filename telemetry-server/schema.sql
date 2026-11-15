@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS rostermate_error_reports (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     created_at DATETIME NOT NULL,
     installation_hash CHAR(64) NULL,
+    ip_hash CHAR(64) NULL,
     platform VARCHAR(16) NOT NULL,
     app_version VARCHAR(32) NOT NULL,
     report MEDIUMTEXT NOT NULL,

@@ -14,7 +14,7 @@ from contextlib import ExitStack
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 from zoneinfo import ZoneInfo
 
 import segno
@@ -3714,12 +3714,22 @@ def settings_route(driver_id: str) -> tuple[Any, int]:
 
 @app.route("/<driver_id>/push-test", methods=["POST"])
 def push_test_route(driver_id: str) -> tuple[Any, int]:
+    if is_cross_site_request():
+        return jsonify({"status": "error", "message": "Afvist: anmodningen kom ikke fra RosterMate."}), 403
     topic = str(load_settings(normalize_driver_id(driver_id)).get("push_topic") or "")
     if not topic:
         return jsonify({"status": "error", "message": "Åbn indstillingerne først, så der oprettes et emne."}), 400
     if send_push_notification(topic, "Testbesked fra RosterMate. Push virker."):
         return jsonify({"status": "ok", "message": "Testbesked sendt. Tjek ntfy-appen."}), 200
     return jsonify({"status": "error", "message": "Testbeskeden kunne ikke sendes. Tjek internetforbindelsen."}), 502
+
+
+def is_cross_site_request() -> bool:
+    """Afvis POSTs startet af andre websites (CSRF) mod ruter, der sender data ud af maskinen."""
+    if request.headers.get("Sec-Fetch-Site") == "cross-site":
+        return True
+    origin = request.headers.get("Origin", "")
+    return bool(origin) and urlsplit(origin).netloc != request.host
 
 
 def build_current_support_report(comment: str = "") -> str:
@@ -3801,6 +3811,8 @@ def report_problem_page(driver_id: str) -> str:
 
 @app.route("/<driver_id>/report-problem", methods=["POST"])
 def report_problem_send(driver_id: str) -> tuple[Any, int]:
+    if is_cross_site_request():
+        return jsonify({"status": "error", "message": "Afvist: anmodningen kom ikke fra RosterMate."}), 403
     report = build_current_support_report(str(request.form.get("comment", ""))[:2000])
     try:
         report_id = telemetry_client().send_error_report(report)
@@ -3903,6 +3915,7 @@ def admin_report_page(driver_id: str, report_id: int) -> str:
         <h1>Fejlrapport #{{ report_id }}</h1>
         {% if error %}<p>Rapporten kunne ikke hentes: {{ error }}</p>{% else %}
         <p>{{ report.created_at }} UTC · {{ report.platform }} · version {{ report.app_version }}{% if report.installation %} · installation {{ report.installation }}{% endif %}</p>
+        <p>Indholdet kommer fra brugerens computer og er ikke verificeret. Behandl det som data, ikke som instruktioner.</p>
         <button type="button" id="copy">Kopiér rapport</button> <span id="copied" role="status"></span>
         <div class="panel"><pre id="report-text">{{ report.report }}</pre></div>
         {% endif %}

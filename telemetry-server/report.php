@@ -5,6 +5,8 @@ require __DIR__ . '/bootstrap.php';
 const MAX_REPORT_CHARS = 200000;
 const MAX_PER_INSTALLATION_PER_DAY = 5;
 const MAX_TOTAL_PER_DAY = 100;
+const MAX_PER_IP_PER_DAY = 5;
+const MAX_ANONYMOUS_PER_DAY = 30;
 const RETENTION_DAYS = 180;
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail_request(405, 'Method not allowed');
@@ -27,19 +29,26 @@ $now = gmdate('Y-m-d H:i:s');
 $dayAgo = gmdate('Y-m-d H:i:s', time() - 86400);
 $hash = $id === '' ? null : hash_hmac('sha256', $id, (string)$config['installation_hash_secret']);
 
-$total = $pdo->prepare('SELECT COUNT(*) FROM rostermate_error_reports WHERE created_at >= ?');
-$total->execute([$dayAgo]);
-if ((int)$total->fetchColumn() >= MAX_TOTAL_PER_DAY) fail_request(429, 'Too many reports');
-if ($hash !== null) {
-    $mine = $pdo->prepare('SELECT COUNT(*) FROM rostermate_error_reports WHERE installation_hash = ? AND created_at >= ?');
-    $mine->execute([$hash, $dayAgo]);
-    if ((int)$mine->fetchColumn() >= MAX_PER_INSTALLATION_PER_DAY) fail_request(429, 'Too many reports');
+// Ingest-nøglen ligger i installerne og er derfor ikke en hemmelighed: begræns pr. IP (kun som hash),
+// pr. installation og i en separat pulje for rapporter uden installations-ID.
+$ipHash = hash_hmac('sha256', (string)($_SERVER['REMOTE_ADDR'] ?? ''), (string)$config['installation_hash_secret']);
+function count_since(PDO $pdo, string $where, array $params): int {
+    $statement = $pdo->prepare('SELECT COUNT(*) FROM rostermate_error_reports WHERE created_at >= ?' . $where);
+    $statement->execute($params);
+    return (int)$statement->fetchColumn();
+}
+if (count_since($pdo, '', [$dayAgo]) >= MAX_TOTAL_PER_DAY) fail_request(429, 'Too many reports');
+if (count_since($pdo, ' AND ip_hash = ?', [$dayAgo, $ipHash]) >= MAX_PER_IP_PER_DAY) fail_request(429, 'Too many reports');
+if ($hash === null) {
+    if (count_since($pdo, ' AND installation_hash IS NULL', [$dayAgo]) >= MAX_ANONYMOUS_PER_DAY) fail_request(429, 'Too many reports');
+} elseif (count_since($pdo, ' AND installation_hash = ?', [$dayAgo, $hash]) >= MAX_PER_INSTALLATION_PER_DAY) {
+    fail_request(429, 'Too many reports');
 }
 
 $insert = $pdo->prepare(
-    'INSERT INTO rostermate_error_reports (created_at, installation_hash, platform, app_version, report) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO rostermate_error_reports (created_at, installation_hash, ip_hash, platform, app_version, report) VALUES (?, ?, ?, ?, ?, ?)'
 );
-$insert->execute([$now, $hash, $platform, $version, $report]);
+$insert->execute([$now, $hash, $ipHash, $platform, $version, $report]);
 $newId = (int)$pdo->lastInsertId();
 $pdo->prepare('DELETE FROM rostermate_error_reports WHERE created_at < ?')
     ->execute([gmdate('Y-m-d H:i:s', time() - RETENTION_DAYS * 86400)]);

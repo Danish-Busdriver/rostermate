@@ -26,14 +26,14 @@ $rows = $pdo->query(
 $reports = [];
 foreach ($rows as $row) {
     $text = (string)$row['report'];
-    preg_match('/\n(\d{4}-\d\d-\d\dT[^\n]{0,220})/', $text, $firstLog);
+    preg_match('/\n(\d{4}-\d\d-\d\dT[^\n]{0,220})/u', $text, $firstLog);
     $reports[] = [
         'id' => (int)$row['id'],
         'created_at' => $row['created_at'],
         'platform' => $row['platform'],
         'app_version' => $row['app_version'],
         'installation' => $row['installation_hash'] ? substr((string)$row['installation_hash'], 0, 8) : '',
-        'has_comment' => str_contains($text, "\nBrugerens beskrivelse:\n"),
+        'has_comment' => strpos($text, "\nBrugerens beskrivelse:\n") !== false,
         'summary' => $firstLog[1] ?? 'Ingen loglinjer',
     ];
 }
