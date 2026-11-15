@@ -34,7 +34,7 @@ from markupsafe import Markup
 from launch_agent import sync_launch_agent_preference
 from installer_update import InstallerUpdateError, download_and_launch_installer
 from login import launch_authenticated_context, login_manager, read_stable_page_content, save_session_storage
-from notifications import send_change_notification
+from notifications import change_notification_message, ntfy_topic_url, send_change_notification, send_push_notification
 from port_config import configured_port, port_is_available, save_port, valid_port
 from release_update import check_for_release_update
 from runtime_diagnostics import collect_runtime_diagnostics
@@ -477,6 +477,7 @@ def driver_urls(driver_id: str) -> dict[str, str]:
         "history_url": f"{base_path}/history",
         "sync_url": f"{base_path}/sync",
         "settings_post_url": f"{base_path}/settings",
+        "push_test_url": f"{base_path}/push-test",
         "install_update_url": f"{base_path}/install-update",
         "error_report_url": f"{base_path}/error-report",
         "admin_url": f"{base_path}/admin",
@@ -534,9 +535,17 @@ def notify_if_schedule_changed(
     *,
     had_existing_events: bool,
 ) -> bool:
-    if not had_existing_events or not settings.get("notify_on_changes", True):
+    if not had_existing_events:
         return False
-    return send_change_notification(changes)
+    sent = bool(settings.get("notify_on_changes", True)) and send_change_notification(changes)
+    if settings.get("push_enabled") and settings.get("push_topic"):
+        # Kun den korte tælletekst – aldrig chaufførnummer eller vagtdetaljer, da ntfy-emner er offentlige.
+        sent = send_push_notification(str(settings["push_topic"]), change_notification_message(changes)) or sent
+    return sent
+
+
+def new_push_topic() -> str:
+    return "rostermate-" + secrets.token_urlsafe(18)
 
 
 # SelfService leverer engelske titler; de oversættes kun ved visning/eksport, så event-ID'er og sync-identitet er uændrede.
@@ -2897,7 +2906,7 @@ def index(driver_id: str) -> str:
                                     <div class="calendar-qr" style="margin-top:0.9rem;">
                                         {{ phone_calendar_qr }}
                                         <div class="small" style="margin-top:0.4rem;">Scan med iPhone-kameraet for at abonnere på kalenderen.</div>
-                                        <button type="button" class="secondary" style="margin-top:0.6rem;" data-copy="{{ phone_calendar_url }}" onclick="copyLink(this)">Kopiér link</button>
+                                        <button type="button" class="button-link ghost" style="margin-top:0.6rem;" data-copy="{{ phone_calendar_url }}" onclick="copyLink(this)">Kopiér link</button>
                                     </div>
                                     <script>
                                         function copyLink(button) {
@@ -3124,6 +3133,10 @@ def settings_page(driver_id: str) -> str:
     safe_driver_id = normalize_driver_id(driver_id)
     session["last_driver_id"] = safe_driver_id
     settings = load_settings(safe_driver_id)
+    if not settings.get("push_topic"):
+        settings = {**settings, "push_topic": new_push_topic()}
+        save_driver_settings(safe_driver_id, settings)
+    push_url = ntfy_topic_url(str(settings["push_topic"]))
     session_store = SelfServiceSessionStore.from_paths(safe_driver_id, paths)
     notice = request.args.get("notice", "")
     notice_type = request.args.get("notice_type", "success")
@@ -3413,6 +3426,15 @@ def settings_page(driver_id: str) -> str:
                     .catch(err => showNotification('Netværksfejl: ' + err.message, 'error'));
                 }
 
+                function sendPushTest(button) {
+                    button.disabled = true;
+                    fetch('{{ urls.push_test_url }}', { method: 'POST' })
+                    .then(r => r.json())
+                    .then(data => showNotification(data.message, data.status === 'ok' ? 'success' : 'error'))
+                    .catch(err => showNotification('Netværksfejl: ' + err.message, 'error'))
+                    .finally(() => { button.disabled = false; });
+                }
+
                 function handleActionSubmit(e, endpoint) {
                     e.preventDefault();
                     const formData = new FormData(e.target);
@@ -3537,6 +3559,14 @@ def settings_page(driver_id: str) -> str:
                                 </div>
                                 <label class="row"><input type="checkbox" name="automatic_sync_enabled" value="true" {% if settings.automatic_sync_enabled %}checked{% endif %}> Kør automatisk synkronisering for denne profil</label>
                                 <label class="row"><input type="checkbox" name="notify_on_changes" value="true" {% if settings.notify_on_changes %}checked{% endif %}> Vis en systembesked, når vagter ændres</label>
+                                <label class="row"><input type="checkbox" name="push_enabled" value="true" {% if settings.push_enabled %}checked{% endif %}> Send også en push-besked til telefonen (ntfy)</label>
+                                <div class="field-hint">
+                                    Installér ntfy-appen (gratis, iOS/Android), og abonnér på dette emne:
+                                    <strong style="overflow-wrap:anywhere;">{{ settings.push_topic }}</strong>.
+                                    Beskeden indeholder kun antallet af ændringer, aldrig dit chaufførnummer eller vagterne.
+                                </div>
+                                <div style="margin-top:0.5rem;">{{ push_qr }}</div>
+                                <div class="inline-actions"><button type="button" class="ghost-button" onclick="sendPushTest(this)">Send testbesked</button></div>
                                 <div class="field">
                                     <label for="days_ahead">Dage frem</label>
                                     <input id="days_ahead" name="days_ahead" type="number" min="1" max="365" value="{{ settings.days_ahead }}">
@@ -3608,6 +3638,7 @@ def settings_page(driver_id: str) -> str:
         telemetry_state=telemetry_state,
         recent_errors=recent_errors,
         recent_sync_timings=recent_sync_timings,
+        push_qr=qr_code_svg(push_url, "QR-kode til ntfy-emnet"),
         telemetry_configured=telemetry.configured(),
         show_admin=telemetry.admin_configured(),
     )
@@ -3625,6 +3656,7 @@ def settings_route(driver_id: str) -> tuple[Any, int]:
     remove_old_shifts = request.form.get("remove_old_shifts") == "true"
     automatic_sync_enabled = request.form.get("automatic_sync_enabled") == "true"
     notify_on_changes = request.form.get("notify_on_changes") == "true"
+    push_enabled = request.form.get("push_enabled") == "true"
     anonymous_usage_enabled = request.form.get("anonymous_usage_enabled") == "true"
     current_port = application_port()
     requested_port = valid_port(request.form.get("app_port", current_port))
@@ -3642,6 +3674,8 @@ def settings_route(driver_id: str) -> tuple[Any, int]:
         "employment_type": employment_type,
         "automatic_sync_enabled": automatic_sync_enabled,
         "notify_on_changes": notify_on_changes,
+        "push_enabled": push_enabled,
+        "push_topic": settings.get("push_topic") or new_push_topic(),
         "calendar_public_base_url": request.form.get(
             "calendar_public_base_url", settings.get("calendar_public_base_url", "")
         ).strip().rstrip("/"),
@@ -3673,6 +3707,16 @@ def settings_route(driver_id: str) -> tuple[Any, int]:
         "restart_required": port_changed,
         "next_url": f"http://localhost:{requested_port}/",
     })
+
+
+@app.route("/<driver_id>/push-test", methods=["POST"])
+def push_test_route(driver_id: str) -> tuple[Any, int]:
+    topic = str(load_settings(normalize_driver_id(driver_id)).get("push_topic") or "")
+    if not topic:
+        return jsonify({"status": "error", "message": "Åbn indstillingerne først, så der oprettes et emne."}), 400
+    if send_push_notification(topic, "Testbesked fra RosterMate. Push virker."):
+        return jsonify({"status": "ok", "message": "Testbesked sendt. Tjek ntfy-appen."}), 200
+    return jsonify({"status": "error", "message": "Testbeskeden kunne ikke sendes. Tjek internetforbindelsen."}), 502
 
 
 @app.route("/<driver_id>/admin")

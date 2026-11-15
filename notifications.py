@@ -5,8 +5,11 @@ import subprocess
 import sys
 from typing import Any, Callable
 
+import requests
+
 
 Runner = Callable[..., Any]
+NTFY_BASE_URL = "https://ntfy.sh"
 
 
 def change_notification_message(changes: list[dict[str, Any]]) -> str:
@@ -71,3 +74,23 @@ def send_change_notification(
     except OSError:
         return False
     return False
+
+
+def ntfy_topic_url(topic: str) -> str:
+    return f"{NTFY_BASE_URL}/{topic}"
+
+
+def send_push_notification(topic: str, message: str, *, post: Runner = requests.post) -> bool:
+    """Push via ntfy. Må aldrig få en sync til at fejle, så alle fejl giver blot False."""
+    if not topic or not message:
+        return False
+    try:
+        response = post(
+            ntfy_topic_url(topic),
+            data=message.encode("utf-8"),
+            headers={"Title": "RosterMate"},
+            timeout=5,
+        )
+        return 200 <= int(response.status_code) < 300
+    except Exception:
+        return False
