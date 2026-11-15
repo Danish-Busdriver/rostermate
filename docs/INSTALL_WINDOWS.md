@@ -161,6 +161,8 @@ Alle installationstyper kontrollerer GitHub Releases højst én gang i døgnet. 
 
 Under **Indstillinger → Anonym brugsstatistik** kan du styre et anonymt livstegn efter hver manuel eller planlagt synkronisering. Det indeholder kun et tilfældigt installations-ID, RosterMate-version og `Windows`. Funktionen er slået til som standard, kan fravælges når som helst og sender aldrig chaufførnummer, SelfService-login eller kalenderdata.
 
+**Rapportér et problem** (fra fejlbanneret eller kortet Fejlrapport på dashboardet) sender en fejlrapport til udvikleren, men kun når brugeren selv trykker **Send**. Siden viser præcis den tekst, der sendes: appversion, styresystem, Python/Playwright-status, profilindstillinger uden identitet og de seneste loglinjer. Chaufførnummer, login, adgangskode, vagter, brugernavn, computernavn, IP-adresser, e-mails og kalender-tokens fjernes, før teksten vises. Serveren gemmer rapporter i 180 dage og tager højst 5 rapporter pr. installation pr. døgn.
+
 ## Test
 
 Ved månedsskift venter RosterMate på SelfService-kalenderen, aflæser dens faktisk viste måned og bruger automatisk knap- eller dropdown-navigation. Det undgår timeout, hvis Windows-layoutet ikke viser `#NextMonth`.

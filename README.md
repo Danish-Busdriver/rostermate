@@ -39,6 +39,7 @@ Vælg selv, hvor mange dage der skal hentes. RosterMate følger perioden på tv�
 - QR-kode og Kopiér-knap, så kalenderen kan abonneres fra iPhone på få sekunder
 - Ferie vises som "Ferie" i dashboard og kalender
 - Historik, ændringsregistrering og automatisk backup
+- **Rapportér et problem**: send en renset fejlrapport til udvikleren med ét klik, efter du har set indholdet
 - Separate profiler til flere chauffører
 - Daglig versionskontrol med **Hent og installér**, som åbner det rigtige installationsprogram
 - RosterMate-logo i Mac-menulinjen og Windows-systembakken

@@ -172,6 +172,12 @@ def test_admin_is_hidden_without_local_key_and_uses_aggregate_stats(tmp_path, mo
     monkeypatch.setenv("ROSTERMATE_TELEMETRY_ADMIN_URL", "https://example.invalid/stats.php")
     monkeypatch.setenv("ROSTERMATE_TELEMETRY_ADMIN_KEY", "private-admin-secret")
     monkeypatch.setattr(
+        app_module.TelemetryClient,
+        "fetch_error_reports",
+        lambda self: [{"id": 3, "created_at": "2026-11-15 10:00:00", "platform": "windows", "app_version": "1.17.0",
+                       "installation": "ab12cd34", "has_comment": True, "summary": "sync fejlede"}],
+    )
+    monkeypatch.setattr(
         telemetry_module.requests,
         "get",
         lambda *args, **kwargs: FakeResponse({
@@ -195,3 +201,5 @@ def test_admin_is_hidden_without_local_key_and_uses_aggregate_stats(tmp_path, mo
     assert b"Windows" in page.data
     assert b"Sync-aktivitet" in page.data
     assert b"Nye" in page.data
+
+    assert b"/1234/admin/reports/3" in page.data and b"sync fejlede" in page.data

@@ -38,6 +38,7 @@ from notifications import change_notification_message, ntfy_topic_url, send_chan
 from port_config import configured_port, port_is_available, save_port, valid_port
 from release_update import check_for_release_update
 from runtime_diagnostics import collect_runtime_diagnostics
+from support_report import build_support_report
 from session_store import SelfServiceSessionStore
 from settings import apply_wizard_preferences, with_setup_defaults
 from sync import build_sync_preview, fetch_status_is_error, run_initial_sync as run_initial_sync_core
@@ -480,6 +481,7 @@ def driver_urls(driver_id: str) -> dict[str, str]:
         "push_test_url": f"{base_path}/push-test",
         "install_update_url": f"{base_path}/install-update",
         "error_report_url": f"{base_path}/error-report",
+        "report_problem_url": f"{base_path}/report-problem",
         "admin_url": f"{base_path}/admin",
         "calendar_url": f"{base_path}/calendar.ics",
     }
@@ -2735,6 +2737,7 @@ def index(driver_id: str) -> str:
                                     <input type="hidden" name="days_ahead" value="{{ days_ahead }}">
                                     <button type="submit">Prøv igen nu</button>
                                 </form>
+                                <a href="{{ urls.report_problem_url }}" style="color:inherit; text-decoration:underline; font-weight:600;">Send fejlrapport til udvikleren</a>
                             </div>
                             {% endif %}
                             {% if needs_selfservice_setup %}
@@ -2889,7 +2892,7 @@ def index(driver_id: str) -> str:
                                 <div class="quick-card">
                                     <strong>Fejlrapport</strong>
                                     <div class="small">Hent en lokal rapport med runtime-status og seneste fejl.</div>
-                                    <div style="margin-top:0.8rem;"><a class="button-link ghost" href="{{ urls.error_report_url }}">Hent rapport</a></div>
+                                    <div style="margin-top:0.8rem; display:flex; gap:0.5rem; flex-wrap:wrap;"><a class="button-link ghost" href="{{ urls.report_problem_url }}">Send til udvikleren</a><a class="button-link ghost" href="{{ urls.error_report_url }}">Hent rapport</a></div>
                                 </div>
                                 <div class="quick-card">
                                     <strong>ICS eksport</strong>
@@ -3719,6 +3722,94 @@ def push_test_route(driver_id: str) -> tuple[Any, int]:
     return jsonify({"status": "error", "message": "Testbeskeden kunne ikke sendes. Tjek internetforbindelsen."}), 502
 
 
+def build_current_support_report(comment: str = "") -> str:
+    profiles = {driver_id: load_settings(driver_id) for driver_id in list_driver_ids()}
+    return build_support_report(
+        version=APP_VERSION,
+        commit=software_info().get("commit", "ukendt"),
+        profiles=profiles,
+        log_entries=read_recent_errors(ERROR_LOG_PATH, limit=50),
+        runtime=collect_runtime_diagnostics(),
+        port=application_port(),
+        comment=comment,
+    )
+
+
+REPORT_PROBLEM_TEMPLATE = """
+<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rapportér et problem · RosterMate</title><style>
+:root{--bg:#eef4fb;--panel:#fff;--text:#14213d;--muted:#64748b;--accent:#10213c;--border:#dbe6f2;--ok:#0f766e;--err:#b42318}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--text);background:linear-gradient(180deg,#f7fbff,var(--bg))}
+.container{max-width:860px;margin:auto;padding:1.5rem 1.25rem 3rem}a{color:inherit}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:20px;padding:1.3rem;margin-top:1rem}
+h1{margin:.4rem 0 .3rem}p{color:var(--muted);line-height:1.5;margin:.3rem 0}
+label{font-weight:600;display:block;margin-bottom:.4rem}
+textarea{width:100%;min-height:110px;font:inherit;padding:.8rem;border:1px solid var(--border);border-radius:12px;resize:vertical}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.8rem;background:#f5f8fc;border:1px solid var(--border);border-radius:12px;padding:1rem;max-height:420px;overflow:auto;margin:0}
+.actions{display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;margin-top:1rem}
+button{background:var(--accent);color:#fff;border:0;border-radius:999px;padding:.8rem 1.3rem;font:inherit;font-weight:600;cursor:pointer}
+button:disabled{opacity:.6;cursor:default}
+#result{font-weight:600}#result.ok{color:var(--ok)}#result.error{color:var(--err)}
+ul{color:var(--muted);margin:.4rem 0 0;padding-left:1.2rem;line-height:1.6}
+</style></head><body><main class="container">
+<a href="{{ urls.dashboard_url }}">← Til dashboard</a>
+<h1>Rapportér et problem</h1>
+<p>Send en fejlrapport til udvikleren af RosterMate. Den indeholder kun oplysninger om appen og computerens styresystem, så fejlen kan findes og rettes.</p>
+<div class="panel">
+  <strong>Det bliver aldrig sendt</strong>
+  <ul><li>Dit chaufførnummer, dit login eller din adgangskode</li><li>Dine vagter eller din kalender</li><li>Dit navn, computerens navn, IP-adresse eller e-mail</li></ul>
+</div>
+<form class="panel" id="report-form">
+  <label for="comment">Hvad skete der? (valgfrit)</label>
+  <textarea id="comment" name="comment" maxlength="2000" placeholder="Fx: Automatisk sync fejler hver dag siden fredag."></textarea>
+  <p>Skriv ikke personlige oplysninger her.</p>
+  <div class="actions"><button type="submit" id="send">Send fejlrapport</button><span id="result" role="status"></span></div>
+</form>
+<div class="panel">
+  <strong>Det her bliver sendt</strong>
+  <p>Teksten nedenfor er præcis det, der sendes. Din beskrivelse kommer med til sidst.</p>
+  <pre id="preview">{{ report }}</pre>
+</div>
+</main>
+<script>
+document.getElementById('report-form').addEventListener('submit', function (event) {
+  event.preventDefault();
+  var button = document.getElementById('send'), result = document.getElementById('result');
+  button.disabled = true; result.className = ''; result.textContent = 'Sender…';
+  fetch('{{ urls.report_problem_url }}', {method: 'POST', body: new FormData(event.target)})
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      result.className = data.status === 'ok' ? 'ok' : 'error';
+      result.textContent = data.message;
+      if (data.status !== 'ok') button.disabled = false;
+    })
+    .catch(function () { result.className = 'error'; result.textContent = 'RosterMate svarede ikke. Prøv igen.'; button.disabled = false; });
+});
+</script>
+</body></html>
+"""
+
+
+@app.route("/<driver_id>/report-problem")
+def report_problem_page(driver_id: str) -> str:
+    return render_template_string(
+        REPORT_PROBLEM_TEMPLATE,
+        urls=driver_urls(normalize_driver_id(driver_id)),
+        report=build_current_support_report(),
+    )
+
+
+@app.route("/<driver_id>/report-problem", methods=["POST"])
+def report_problem_send(driver_id: str) -> tuple[Any, int]:
+    report = build_current_support_report(str(request.form.get("comment", ""))[:2000])
+    try:
+        report_id = telemetry_client().send_error_report(report)
+    except RuntimeError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 502
+    suffix = f" Rapportnummer: {report_id}." if report_id else ""
+    return jsonify({"status": "ok", "message": f"Tak! Fejlrapporten er sendt.{suffix}"}), 200
+
+
 @app.route("/<driver_id>/admin")
 def admin_page(driver_id: str) -> str:
     safe_driver_id = normalize_driver_id(driver_id)
@@ -3731,6 +3822,10 @@ def admin_page(driver_id: str) -> str:
     except Exception as exc:
         stats = {"total": 0, "active_7_days": 0, "active_30_days": 0, "active_90_days": 0, "new_7_days": 0, "new_30_days": 0, "platforms": [], "versions": [], "activity": []}
         error = str(exc)
+    try:
+        reports, reports_error = telemetry.fetch_error_reports(), ""
+    except Exception as exc:
+        reports, reports_error = [], compact_error_message(exc)
     activity_by_date = {
         str(item.get("date")): int(item.get("installations") or 0)
         for item in stats.get("activity", [])
@@ -3770,8 +3865,11 @@ def admin_page(driver_id: str) -> str:
         <section class="cards" style="margin-top:1rem"><div class="card"><span>Nye · 7 dage</span><strong>{{ stats.new_7_days }}</strong></div><div class="card"><span>Nye · 30 dage</span><strong>{{ stats.new_30_days }}</strong></div><div class="card"><span>På version {{ app_version }}</span><strong>{{ current_version_count }}</strong></div><div class="card"><span>Opdateret · 30 dage</span><strong>{{ version_adoption }}%</strong></div></section>
         <section class="panel" style="margin-top:1rem"><h2>Sync-aktivitet · 30 dage</h2><div class="chart" aria-label="Installationer der synkroniserede pr. dag">{% for item in activity %}<div class="bar" style="height:{{ item.height }}%" data-label="{{ item.label }} · {{ item.count }}" title="{{ item.label }} · {{ item.count }} installationer"></div>{% endfor %}</div><p class="chart-note">Hver søjle viser antal forskellige installationer, der sendte mindst ét sync-livstegn den pågældende dag.</p></section>
         <section class="grid"><div class="panel"><h2>Platforme · 30 dage</h2>{% for item in stats.platforms %}<div class="row"><span>{{ 'Windows' if item.platform == 'windows' else 'macOS' if item.platform == 'macos' else item.platform }}</span><strong>{{ item.count }}</strong></div>{% else %}<p>Ingen data endnu.</p>{% endfor %}</div><div class="panel"><h2>Versioner · 30 dage</h2>{% for item in stats.versions %}<div class="row"><span>{{ item.version }}</span><strong>{{ item.count }}</strong></div>{% else %}<p>Ingen data endnu.</p>{% endfor %}</div></section>
+        <section class="panel" style="margin-top:1rem"><h2>Fejlrapporter</h2>{% if reports_error %}<p class="chart-note">Fejlrapporterne kunne ikke hentes: {{ reports_error }}</p>{% endif %}{% for item in reports %}<a class="row" href="{{ urls.admin_url }}/reports/{{ item.id }}"><span>#{{ item.id }} · {{ item.created_at }} · {{ 'Windows' if item.platform == 'windows' else 'macOS' if item.platform == 'macos' else item.platform }} {{ item.app_version }}{% if item.has_comment %} · med beskrivelse{% endif %}<br><small style="color:var(--muted);overflow-wrap:anywhere">{{ item.summary }}</small></span><strong>Åbn</strong></a>{% else %}{% if not reports_error %}<p>Ingen fejlrapporter endnu.</p>{% endif %}{% endfor %}</section>
         </main></body></html>
         """,
+        reports=reports,
+        reports_error=reports_error,
         stats=stats,
         error=error,
         urls=driver_urls(safe_driver_id),
@@ -3779,6 +3877,43 @@ def admin_page(driver_id: str) -> str:
         app_version=APP_VERSION,
         current_version_count=current_version_count,
         version_adoption=version_adoption,
+    )
+
+
+@app.route("/<driver_id>/admin/reports/<int:report_id>")
+def admin_report_page(driver_id: str, report_id: int) -> str:
+    telemetry = telemetry_client()
+    if not telemetry.admin_configured():
+        abort(404)
+    try:
+        report, error = telemetry.fetch_error_report(report_id), ""
+    except Exception as exc:
+        report, error = {}, compact_error_message(exc)
+    return render_template_string(
+        """
+        <!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Fejlrapport #{{ report_id }} · RosterMate Admin</title><style>
+        :root{--bg:#eef4fb;--panel:#fff;--text:#14213d;--muted:#64748b;--accent:#10213c;--border:#dbe6f2}
+        *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--text);background:var(--bg)}a{color:inherit}
+        .container{max-width:1050px;margin:auto;padding:1.5rem 1.25rem 3rem}.panel{background:var(--panel);border:1px solid var(--border);border-radius:20px;padding:1.2rem;margin-top:1rem}
+        pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.82rem;margin:0}p{color:var(--muted)}
+        button{background:var(--accent);color:#fff;border:0;border-radius:999px;padding:.7rem 1.2rem;font:inherit;font-weight:600;cursor:pointer}
+        </style></head><body><main class="container">
+        <a href="{{ urls.admin_url }}">← Til admin</a>
+        <h1>Fejlrapport #{{ report_id }}</h1>
+        {% if error %}<p>Rapporten kunne ikke hentes: {{ error }}</p>{% else %}
+        <p>{{ report.created_at }} UTC · {{ report.platform }} · version {{ report.app_version }}{% if report.installation %} · installation {{ report.installation }}{% endif %}</p>
+        <button type="button" id="copy">Kopiér rapport</button> <span id="copied" role="status"></span>
+        <div class="panel"><pre id="report-text">{{ report.report }}</pre></div>
+        {% endif %}
+        </main><script>
+        var b=document.getElementById('copy');if(b){b.addEventListener('click',function(){navigator.clipboard.writeText(document.getElementById('report-text').textContent).then(function(){document.getElementById('copied').textContent='Kopieret – indsæt den hos Claude.';});});}
+        </script></body></html>
+        """,
+        urls=driver_urls(normalize_driver_id(driver_id)),
+        report_id=report_id,
+        report=report,
+        error=error,
     )
 
 
