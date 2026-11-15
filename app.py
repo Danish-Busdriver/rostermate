@@ -537,9 +537,17 @@ def notify_if_schedule_changed(
     return send_change_notification(changes)
 
 
+# SelfService leverer engelske titler; de oversættes kun ved visning/eksport, så event-ID'er og sync-identitet er uændrede.
+DISPLAY_TITLES = {"vacation": "Ferie"}
+
+
+def display_shift_title(title: str) -> str:
+    return DISPLAY_TITLES.get(title.strip().casefold(), title)
+
+
 def extract_shift_name(title: str) -> str:
     if "ID:" not in title:
-        return title or "Ukendt"
+        return display_shift_title(title) if title else "Ukendt"
     id_match = re.search(r"ID:\s+([A-Za-z_]+)", title)
     if id_match:
         return id_match.group(1).replace("_", " ")
@@ -955,7 +963,7 @@ def _ics_event_lines(event: dict[str, Any], timestamp: str) -> list[str]:
             ]
         )
 
-    lines.extend([f"SUMMARY:{_escape_ics_text(event.get('title', 'Vagt'))}", "END:VEVENT"])
+    lines.extend([f"SUMMARY:{_escape_ics_text(display_shift_title(str(event.get('title') or 'Vagt')))}", "END:VEVENT"])
     return lines
 
 
