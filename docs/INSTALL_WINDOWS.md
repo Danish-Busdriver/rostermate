@@ -108,6 +108,8 @@ De præcise tider vises under **Indstillinger → Synkronisering**, hvor auto-sy
 
 Indstillingen **Vis en systembesked, når vagter ændres** bruger Windows' egne systembakke-beskeder. Den første hentning giver ingen besked; notifikationen vises kun, når en senere synkronisering faktisk tilføjer, ændrer eller fjerner vagter.
 
+Indstillingen **Send også en push-besked til telefonen (ntfy)** er slået fra som standard. Installér den gratis ntfy-app (iOS/Android), og abonnér på det emne, der vises under **Indstillinger → Synkronisering**, eller scan QR-koden. Knappen **Send testbesked** sender en prøvebesked. Emnet er tilfældigt og svært at gætte, men ntfy-emner er offentlige for alle, der kender navnet. Derfor indeholder beskeden kun antallet af ændringer, aldrig chaufførnummer eller vagtdetaljer. Hvis ntfy.sh ikke kan nås, fortsætter synkroniseringen normalt.
+
 Automatisk og manuel sync genbruger den gemte SelfService-profil i en almindelig Chromium-browser placeret skjult uden for skærmen. Tide afviser i nogle miljøer en ægte headless-browser, selvom sessionen er gyldig. Et synligt loginvindue åbnes derfor kun, hvis den offscreen-browser heller ikke kan bruge sessionen eller de gemte loginoplysninger.
 
 RosterMate skal køre på det valgte tidspunkt. Aktivér **Start automatisk med Windows** for at lade appen starte ved login; en slukket eller sovende pc vækkes ikke af RosterMate.
@@ -141,6 +143,8 @@ Afinstallationen stopper RosterMate og fjerner automatiske loginopgaver, program
 - En offentlig HTTPS-adresse kræver domæne, TLS-proxy og router-/tunnelopsætning.
 
 Windows Firewall kan spørge, om Python må modtage trafik. Tillad kun private netværk, medmindre en afgrænset HTTPS-proxy er konfigureret.
+
+Dashboardets ICS-kort viser en QR-kode til telefonens kalenderabonnement (den offentlige adresse, hvis den er sat, ellers adressen på samme Wi-Fi). Scan den med iPhone-kameraet for at abonnere, eller brug **Kopiér link**.
 
 ## Automatiske opdateringer
 

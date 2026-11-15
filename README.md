@@ -32,9 +32,12 @@ Vælg selv, hvor mange dage der skal hentes. RosterMate følger perioden på tv�
 - Dashboard med status, kommende vagter og seneste ændringer
 - Tydelig auto-sync-status, fejlbesked og knap til at prøve igen
 - Systembesked på macOS og Windows, når vagter faktisk ændres
+- Valgfri push-besked til telefonen via ntfy (kun antal ændringer)
 - Valgfri synkroniseringsperiode, som huskes efter genstart
 - ICS-kalender til Apple Kalender, iPhone og andre kalenderapps
 - Kalenderlink til samme computer, lokalt netværk eller en valgfri HTTPS-adresse
+- QR-kode og Kopiér-knap, så kalenderen kan abonneres fra iPhone på få sekunder
+- Ferie vises som "Ferie" i dashboard og kalender
 - Historik, ændringsregistrering og automatisk backup
 - Separate profiler til flere chauffører
 - Daglig versionskontrol med **Hent og installér**, som åbner det rigtige installationsprogram

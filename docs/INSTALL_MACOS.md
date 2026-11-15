@@ -77,6 +77,8 @@ De præcise tider vises under **Indstillinger → Synkronisering**, hvor auto-sy
 
 Indstillingen **Vis en systembesked, når vagter ændres** bruger macOS' egne notifikationer. Den første hentning giver ingen besked; notifikationen vises kun, når en senere synkronisering faktisk tilføjer, ændrer eller fjerner vagter.
 
+Indstillingen **Send også en push-besked til telefonen (ntfy)** er slået fra som standard. Installér den gratis ntfy-app (iOS/Android), og abonnér på det emne, der vises under **Indstillinger → Synkronisering**, eller scan QR-koden. Knappen **Send testbesked** sender en prøvebesked. Emnet er tilfældigt og svært at gætte, men ntfy-emner er offentlige for alle, der kender navnet. Derfor indeholder beskeden kun antallet af ændringer, aldrig chaufførnummer eller vagtdetaljer. Hvis ntfy.sh ikke kan nås, fortsætter synkroniseringen normalt.
+
 Automatisk og manuel sync genbruger den gemte SelfService-profil i en almindelig Chromium-browser placeret skjult uden for skærmen. Tide afviser i nogle miljøer en ægte headless-browser, selvom sessionen er gyldig. Et synligt loginvindue åbnes derfor kun, hvis den offscreen-browser heller ikke kan bruge sessionen eller de gemte loginoplysninger.
 
 RosterMate skal køre på det valgte tidspunkt. Aktivér **Start automatisk med macOS** for at lade appen starte ved login; en slukket eller sovende Mac vækkes ikke af RosterMate.
@@ -150,6 +152,8 @@ cp docs/Caddyfile.example Caddyfile.local
 Indsæt eget domæne og chaufførnummer i `Caddyfile.local`. Filen må ikke committes. Ekstern TCP-port 80 videresendes til Mac-port 8081, og ekstern TCP-port 443 videresendes til Mac-port 8443.
 
 Mac’en skal have en reserveret lokal IP, domænet skal pege på routerens offentlige IP, og forbindelsen må ikke være blokeret af CGNAT. Brug DDNS, hvis den offentlige IP kan ændre sig.
+
+Dashboardets ICS-kort viser en QR-kode til telefonens kalenderabonnement (den offentlige adresse, hvis den er sat, ellers adressen på samme Wi-Fi). Scan den med iPhone-kameraet for at abonnere, eller brug **Kopiér link**.
 
 ## Test installationen
 
