@@ -17,6 +17,7 @@ from typing import Any, Callable
 from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
 
+import segno
 from flask import Flask, Response, abort, jsonify, redirect, render_template_string, request, send_file, session, url_for
 
 from automatic_sync import (
@@ -29,6 +30,7 @@ from automatic_sync import (
 from dashboard import should_show_first_run, should_show_welcome_back
 from error_log import classify_error, read_recent_errors, record_diagnostic, record_error, split_recent_entries
 from credentials import get_password, set_password
+from markupsafe import Markup
 from launch_agent import sync_launch_agent_preference
 from installer_update import InstallerUpdateError, download_and_launch_installer
 from login import launch_authenticated_context, login_manager, read_stable_page_content, save_session_storage
@@ -779,6 +781,16 @@ def calendar_subscription_address(driver_id: str, token: str, public_base_url: s
     if not base_url:
         base_url = f"http://{local_network_address()}:{application_port()}"
     return f"{base_url}/{normalize_driver_id(driver_id)}/calendar.ics?token={token}"
+
+
+def qr_code_svg(data: str, title: str) -> Markup:
+    # Hvid baggrund og quiet zone, så koden kan scannes, også i mørkt tema.
+    return Markup(segno.make(data, error="m").svg_inline(scale=4, light="#fff", title=title))
+
+
+def webcal_address(url: str) -> str:
+    """iPhone-kalenderen tilbyder kun abonnement (ikke engangsimport) for webcal://-links."""
+    return re.sub(r"^https?://", "webcal://", url)
 
 
 def create_backup(source: Path, backup_dir: Path | None = None) -> Path:
@@ -2882,6 +2894,19 @@ def index(driver_id: str) -> str:
                                     <div class="small" style="margin-top:0.7rem;"><strong>Overalt via HTTPS</strong></div>
                                     <div class="small" style="overflow-wrap:anywhere;">{{ public_calendar_url }}</div>
                                     {% endif %}
+                                    <div class="calendar-qr" style="margin-top:0.9rem;">
+                                        {{ phone_calendar_qr }}
+                                        <div class="small" style="margin-top:0.4rem;">Scan med iPhone-kameraet for at abonnere på kalenderen.</div>
+                                        <button type="button" class="secondary" style="margin-top:0.6rem;" data-copy="{{ phone_calendar_url }}" onclick="copyLink(this)">Kopiér link</button>
+                                    </div>
+                                    <script>
+                                        function copyLink(button) {
+                                            navigator.clipboard.writeText(button.dataset.copy).then(
+                                                () => { button.textContent = "Kopieret"; },
+                                                () => { button.textContent = "Kunne ikke kopiere"; }
+                                            );
+                                        }
+                                    </script>
                                 </div>
                             </div>
                         </div>
@@ -2917,6 +2942,8 @@ def index(driver_id: str) -> str:
         local_calendar_url=local_calendar_url,
         lan_calendar_url=lan_calendar_url,
         public_calendar_url=public_calendar_url,
+        phone_calendar_url=public_calendar_url or lan_calendar_url,
+        phone_calendar_qr=qr_code_svg(webcal_address(public_calendar_url or lan_calendar_url), "QR-kode til kalenderabonnement"),
         software=software_info(),
         show_profile_switcher=show_profile_switcher,
         app_port=app_port,

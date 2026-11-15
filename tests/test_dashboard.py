@@ -83,3 +83,30 @@ def test_change_description_shows_weekday_and_before_after():
     assert described["date_label"] == "Ons 04.11"
     assert described["detail"] == "09:05 - 16:54 -> 10:05 - 17:54"
     assert described["badge_text"] == "Opdateret"
+
+
+def test_dashboard_shows_calendar_qr_for_public_address(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(app_module, "BACKUP_DIR", tmp_path / "backups")
+    monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
+    monkeypatch.setattr(app_module, "STORAGE_ROOT", tmp_path)
+    monkeypatch.setattr(app_module, "check_for_release_update", lambda *_args, **_kwargs: {"available": False})
+    paths = app_module.get_driver_paths("1234")
+    app_module.save_driver_settings(
+        "1234",
+        {"wizard_completed": True, "calendar_access_token": "tok", "calendar_public_base_url": "https://vagter.example"},
+    )
+    paths["selfservice_storage_state_path"].write_text('{"cookies":[]}', encoding="utf-8")
+    app_module.app.config["TESTING"] = True
+
+    with app_module.app.test_client() as client:
+        html = client.get("/1234/").get_data(as_text=True)
+
+    assert "<svg" in html and "QR-kode til kalenderabonnement" in html
+    assert "Scan med iPhone-kameraet for at abonnere på kalenderen." in html
+    assert 'data-copy="https://vagter.example/1234/calendar.ics?token=tok"' in html
+
+
+def test_webcal_address_replaces_http_scheme():
+    assert app_module.webcal_address("https://a.example/x.ics") == "webcal://a.example/x.ics"
+    assert app_module.webcal_address("http://10.0.0.2:5000/x.ics") == "webcal://10.0.0.2:5000/x.ics"
