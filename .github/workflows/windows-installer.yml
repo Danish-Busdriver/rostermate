@@ -34,15 +34,23 @@ jobs:
             choco install innosetup --no-progress -y
           }
 
-      - name: Build Setup.exe
-        shell: powershell
+      # Bash, ikke PowerShell: PowerShell 5.1 fjerner citationstegn i argumenter til python -c,
+      # så filen blev aldrig skrevet, og Windows-installationer sendte ingen telemetri (1.15-1.16).
+      - name: Write telemetry config
+        shell: bash
         env:
           TELEMETRY_URL: ${{ vars.ROSTERMATE_TELEMETRY_URL }}
           TELEMETRY_KEY: ${{ secrets.ROSTERMATE_TELEMETRY_KEY }}
         run: |
-          if ($env:TELEMETRY_URL -and $env:TELEMETRY_KEY) {
-            python -c 'import os,pathlib; pathlib.Path("telemetry_runtime_config.py").write_text("TELEMETRY_CONFIG = " + repr({"heartbeat_url": os.environ["TELEMETRY_URL"], "ingest_key": os.environ["TELEMETRY_KEY"]}) + "\n", encoding="utf-8")'
-          }
+          if [ -z "$TELEMETRY_URL" ] || [ -z "$TELEMETRY_KEY" ]; then
+            echo "::error::ROSTERMATE_TELEMETRY_URL/KEY mangler – installeren ville ikke sende telemetri"; exit 1
+          fi
+          python -c 'import os,pathlib; pathlib.Path("telemetry_runtime_config.py").write_text("TELEMETRY_CONFIG = " + repr({"heartbeat_url": os.environ["TELEMETRY_URL"], "ingest_key": os.environ["TELEMETRY_KEY"]}) + "\n", encoding="utf-8")'
+          python -c 'from telemetry_runtime_config import TELEMETRY_CONFIG as c; assert c["heartbeat_url"].startswith("https://") and c["ingest_key"]'
+
+      - name: Build Setup.exe
+        shell: powershell
+        run: |
           $Compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           & $Compiler "/DAppVersion=${{ inputs.version }}" "installer\windows\RosterMate.iss"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
