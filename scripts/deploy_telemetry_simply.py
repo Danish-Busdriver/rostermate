@@ -9,7 +9,7 @@ import certifi
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLIC_FILES = (".htaccess", "bootstrap.php", "heartbeat.php", "stats.php", "cleanup.php")
+PUBLIC_FILES = (".htaccess", "bootstrap.php", "heartbeat.php", "stats.php", "cleanup.php", "report.php", "reports.php")
 
 
 def ensure_directory(ftp: ftplib.FTP_TLS, path: str) -> None:

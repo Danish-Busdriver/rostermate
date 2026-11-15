@@ -994,3 +994,17 @@ def test_wizard_preferences_renders_shift_preview():
 
     assert "Vagt 42" in rendered
     assert "08:00–16:00" in rendered
+
+
+def test_vacation_is_shown_and_exported_as_ferie_without_changing_identity(tmp_path):
+    from app import _ics_event_lines, extract_shift_name
+
+    vacation = build_event_from_shift({"id": "Vacation", "from": "00:00", "to": "00:00"}, "2026-07-10")
+    assert vacation["title"] == "Vacation"
+    assert vacation["id"] == "2026-07-10:Vacation:2026-07-10T00:00:00:2026-07-10T23:59:59"
+    assert extract_shift_name(vacation["title"]) == "Ferie"
+    assert "SUMMARY:Ferie" in _ics_event_lines(vacation, "20260701T000000Z")
+
+    # Samme vagt fra næste sync må ikke give en (falsk) ændring.
+    _, changes = sync_schedule([vacation], [dict(vacation)], "2026-07-01", "2026-07-31", True, output_dir=tmp_path)
+    assert changes == []

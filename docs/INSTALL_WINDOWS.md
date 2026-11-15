@@ -10,7 +10,7 @@ Windows-udgaven bruger samme dashboard, SelfService-synkronisering, profiler, hi
 
 ## Anbefalet installation
 
-1. Download `RosterMate-1.16.0-Windows-Setup.exe` fra den seneste GitHub Release.
+1. Download `RosterMate-1.17.0-Windows-Setup.exe` fra den seneste GitHub Release.
 2. Dobbeltklik på installationsfilen.
 3. Vælg eventuelt en skrivebordsgenvej og gennemfør guiden.
 4. Lad installationsprogrammet hente Python, RosterMates afhængigheder og Chromium.
@@ -108,6 +108,8 @@ De præcise tider vises under **Indstillinger → Synkronisering**, hvor auto-sy
 
 Indstillingen **Vis en systembesked, når vagter ændres** bruger Windows' egne systembakke-beskeder. Den første hentning giver ingen besked; notifikationen vises kun, når en senere synkronisering faktisk tilføjer, ændrer eller fjerner vagter.
 
+Indstillingen **Send også en push-besked til telefonen (ntfy)** er slået fra som standard. Installér den gratis ntfy-app (iOS/Android), og abonnér på det emne, der vises under **Indstillinger → Synkronisering**, eller scan QR-koden. Knappen **Send testbesked** sender en prøvebesked. Emnet er tilfældigt og svært at gætte, men ntfy-emner er offentlige for alle, der kender navnet. Derfor indeholder beskeden kun antallet af ændringer, aldrig chaufførnummer eller vagtdetaljer. Hvis ntfy.sh ikke kan nås, fortsætter synkroniseringen normalt.
+
 Automatisk og manuel sync genbruger den gemte SelfService-profil i en almindelig Chromium-browser placeret skjult uden for skærmen. Tide afviser i nogle miljøer en ægte headless-browser, selvom sessionen er gyldig. Et synligt loginvindue åbnes derfor kun, hvis den offscreen-browser heller ikke kan bruge sessionen eller de gemte loginoplysninger.
 
 RosterMate skal køre på det valgte tidspunkt. Aktivér **Start automatisk med Windows** for at lade appen starte ved login; en slukket eller sovende pc vækkes ikke af RosterMate.
@@ -142,6 +144,8 @@ Afinstallationen stopper RosterMate og fjerner automatiske loginopgaver, program
 
 Windows Firewall kan spørge, om Python må modtage trafik. Tillad kun private netværk, medmindre en afgrænset HTTPS-proxy er konfigureret.
 
+Dashboardets ICS-kort viser en QR-kode til telefonens kalenderabonnement (den offentlige adresse, hvis den er sat, ellers adressen på samme Wi-Fi). Scan den med iPhone-kameraet for at abonnere, eller brug **Kopiér link**.
+
 ## Automatiske opdateringer
 
 Windows bruger den samme sikre fast-forward-opdatering som macOS. Lokale ændringer i trackede kodefiler bliver ikke overskrevet.
@@ -156,6 +160,8 @@ $env:ROSTERMATE_SKIP_UPDATE = "1"
 Alle installationstyper kontrollerer GitHub Releases højst én gang i døgnet. Hvis en nyere version findes, viser dashboardet versionsnummeret og knappen **Hent og installér**. Et aktivt klik henter den aktuelle Windows `Setup.exe` og åbner Windows Setup. RosterMate kontrollerer først HTTPS-adresse, versionsbestemt filnavn, filstørrelse og installationsfilens filtype. Følg installationsprogrammet, og start RosterMate igen bagefter. Installationen startes aldrig uden brugerens klik og godkendelse. Resultatet af versionskontrollen gemmes lokalt, og RosterMate fortsætter normalt, hvis GitHub ikke kan kontaktes. Der sendes ingen profil-, chauffør- eller kalenderdata med kontrollen.
 
 Under **Indstillinger → Anonym brugsstatistik** kan du styre et anonymt livstegn efter hver manuel eller planlagt synkronisering. Det indeholder kun et tilfældigt installations-ID, RosterMate-version og `Windows`. Funktionen er slået til som standard, kan fravælges når som helst og sender aldrig chaufførnummer, SelfService-login eller kalenderdata.
+
+**Rapportér et problem** (fra fejlbanneret eller kortet Fejlrapport på dashboardet) sender en fejlrapport til udvikleren, men kun når brugeren selv trykker **Send**. Siden viser præcis den tekst, der sendes: appversion, styresystem, Python/Playwright-status, profilindstillinger uden identitet og de seneste loglinjer. Chaufførnummer, login, adgangskode, vagter, brugernavn, computernavn, IP-adresser, e-mails og kalender-tokens fjernes, før teksten vises. Serveren gemmer rapporter i 180 dage og tager højst 5 rapporter pr. installation pr. døgn.
 
 ## Test
 

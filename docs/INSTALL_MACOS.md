@@ -11,7 +11,7 @@ Denne guide indeholder installation, opdatering og teknisk drift af RosterMate p
 
 ## Anbefalet installation
 
-Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.16.0-macOS.pkg`, og dobbeltklik på filen. Du behøver ikke åbne Terminal.
+Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.17.0-macOS.pkg`, og dobbeltklik på filen. Du behøver ikke åbne Terminal.
 
 Installationsprogrammet placerer RosterMate i **Programmer**, kontrollerer en kompatibel officiel Python-version, opretter appens eget isolerede miljø og installerer alle Python-afhængigheder samt Chromium-browseren til SelfService. macOS beder om administratorgodkendelse. RosterMate bruger port 8080, hvis den er ledig; ellers vælges automatisk den første ledige port frem til 8179. Efter installationen starter appen og åbner opsætningsguiden automatisk på den valgte port. Første installation kan tage et par minutter.
 
@@ -77,6 +77,8 @@ De præcise tider vises under **Indstillinger → Synkronisering**, hvor auto-sy
 
 Indstillingen **Vis en systembesked, når vagter ændres** bruger macOS' egne notifikationer. Den første hentning giver ingen besked; notifikationen vises kun, når en senere synkronisering faktisk tilføjer, ændrer eller fjerner vagter.
 
+Indstillingen **Send også en push-besked til telefonen (ntfy)** er slået fra som standard. Installér den gratis ntfy-app (iOS/Android), og abonnér på det emne, der vises under **Indstillinger → Synkronisering**, eller scan QR-koden. Knappen **Send testbesked** sender en prøvebesked. Emnet er tilfældigt og svært at gætte, men ntfy-emner er offentlige for alle, der kender navnet. Derfor indeholder beskeden kun antallet af ændringer, aldrig chaufførnummer eller vagtdetaljer. Hvis ntfy.sh ikke kan nås, fortsætter synkroniseringen normalt.
+
 Automatisk og manuel sync genbruger den gemte SelfService-profil i en almindelig Chromium-browser placeret skjult uden for skærmen. Tide afviser i nogle miljøer en ægte headless-browser, selvom sessionen er gyldig. Et synligt loginvindue åbnes derfor kun, hvis den offscreen-browser heller ikke kan bruge sessionen eller de gemte loginoplysninger.
 
 RosterMate skal køre på det valgte tidspunkt. Aktivér **Start automatisk med macOS** for at lade appen starte ved login; en slukket eller sovende Mac vækkes ikke af RosterMate.
@@ -101,6 +103,8 @@ python3 app.py
 Alle installationstyper kontrollerer desuden GitHub Releases højst én gang i døgnet. Hvis en nyere version findes, viser dashboardet versionsnummeret og knappen **Hent og installér**. Et aktivt klik henter den aktuelle macOS `.pkg` og åbner macOS Installer. RosterMate kontrollerer først HTTPS-adresse, versionsbestemt filnavn, filstørrelse og pakkens filtype. Følg Apples installationsvindue, og start RosterMate igen bagefter. Installationen startes aldrig uden brugerens klik og godkendelse. Resultatet af versionskontrollen gemmes lokalt, og RosterMate fortsætter normalt, hvis GitHub ikke kan kontaktes. Der sendes ingen profil-, chauffør- eller kalenderdata med kontrollen.
 
 Under **Indstillinger → Anonym brugsstatistik** kan du styre et anonymt livstegn efter hver manuel eller planlagt synkronisering. Det indeholder kun et tilfældigt installations-ID, RosterMate-version og `macOS`. Funktionen er slået til som standard, kan fravælges når som helst og sender aldrig chaufførnummer, SelfService-login eller kalenderdata.
+
+**Rapportér et problem** (fra fejlbanneret eller kortet Fejlrapport på dashboardet) sender en fejlrapport til udvikleren, men kun når brugeren selv trykker **Send**. Siden viser præcis den tekst, der sendes: appversion, styresystem, Python/Playwright-status, profilindstillinger uden identitet og de seneste loglinjer. Chaufførnummer, login, adgangskode, vagter, brugernavn, computernavn, IP-adresser, e-mails og kalender-tokens fjernes, før teksten vises. Serveren gemmer rapporter i 180 dage og tager højst 5 rapporter pr. installation pr. døgn.
 
 Spring kontrollen over ved en enkelt start:
 
@@ -150,6 +154,8 @@ cp docs/Caddyfile.example Caddyfile.local
 Indsæt eget domæne og chaufførnummer i `Caddyfile.local`. Filen må ikke committes. Ekstern TCP-port 80 videresendes til Mac-port 8081, og ekstern TCP-port 443 videresendes til Mac-port 8443.
 
 Mac’en skal have en reserveret lokal IP, domænet skal pege på routerens offentlige IP, og forbindelsen må ikke være blokeret af CGNAT. Brug DDNS, hvis den offentlige IP kan ændre sig.
+
+Dashboardets ICS-kort viser en QR-kode til telefonens kalenderabonnement (den offentlige adresse, hvis den er sat, ellers adressen på samme Wi-Fi). Scan den med iPhone-kameraet for at abonnere, eller brug **Kopiér link**.
 
 ## Test installationen
 

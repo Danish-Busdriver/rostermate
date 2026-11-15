@@ -51,3 +51,8 @@ Efter genstart vises **Admin** i topmenuen. Panelet viser aktive og nye installa
 ## Definition af aktiv installation
 
 Den primære måling er **aktiv de seneste 30 dage**. Afinstallerede, offline eller fravalgte installationer falder automatisk ud af tallet, og rækker uden livstegn slettes efter 365 dage.
+
+
+## Fejlrapporter
+
+`report.php` modtager fejlrapporter med samme ingest-nøgle som `heartbeat.php` (højst 200.000 tegn, 5 pr. installation og 100 i alt pr. døgn, slettes efter 180 dage). `reports.php` lister dem med admin-nøglen og vises under Admin → Fejlrapporter. Tabellen `rostermate_error_reports` oprettes automatisk første gang og findes også i `schema.sql`. Deploy med `scripts/deploy_telemetry_simply.py`.

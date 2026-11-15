@@ -8,11 +8,13 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urljoin
 
 import requests
 
 
 USER_AGENT_TEMPLATE = "RosterMate-Telemetry/{version} (+https://github.com/Danish-Busdriver/rostermate)"
+MAX_REPORT_CHARS = 200_000
 
 
 def _utc_now() -> datetime:
@@ -149,6 +151,58 @@ class TelemetryClient:
             state["last_success_at"] = current.isoformat()
             self.save_state(state)
         return True
+
+    def send_error_report(self, report: str) -> str:
+        """Send en brugergodkendt fejlrapport. Returnerer rapport-ID'et; fejl rejses som RuntimeError."""
+        config = load_runtime_config(self.base_dir)
+        heartbeat_url = config.get("heartbeat_url", "")
+        key = config.get("ingest_key", "")
+        if not heartbeat_url.startswith("https://") or not key:
+            raise RuntimeError("Denne installation kan ikke sende fejlrapporter. Hent rapporten og send den manuelt.")
+        state = self.load_state()
+        try:
+            response = requests.post(
+                urljoin(heartbeat_url, "report.php"),
+                json={
+                    # Installations-ID kun hvis brugeren ikke har slået anonym statistik fra.
+                    "installation_id": str(state.get("installation_id") or "") if state.get("enabled") else "",
+                    "version": self.version,
+                    "platform": self._platform_name(),
+                    "report": report[:MAX_REPORT_CHARS],
+                },
+                headers={"X-RosterMate-Key": key, "User-Agent": USER_AGENT_TEMPLATE.format(version=self.version)},
+                timeout=15,
+            )
+            if response.status_code == 429:
+                raise RuntimeError("Der er sendt mange fejlrapporter i dag. Prøv igen i morgen.")
+            response.raise_for_status()
+            return str(response.json().get("id", ""))
+        except (requests.RequestException, ValueError) as exc:
+            raise RuntimeError("Fejlrapporten kunne ikke sendes. Tjek internetforbindelsen og prøv igen.") from exc
+
+    def _admin_get(self, params: dict[str, Any]) -> dict[str, Any]:
+        config = load_runtime_config(self.base_dir)
+        url = config.get("stats_url", "")
+        key = config.get("admin_key", "")
+        if not url.startswith("https://") or not key:
+            raise RuntimeError("Adminadgang til telemetri er ikke konfigureret lokalt.")
+        response = requests.get(
+            urljoin(url, "reports.php"),
+            params=params,
+            headers={"Authorization": f"Bearer {key}", "User-Agent": USER_AGENT_TEMPLATE.format(version=self.version)},
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise RuntimeError("Telemetri-serveren returnerede et ugyldigt svar.")
+        return payload
+
+    def fetch_error_reports(self) -> list[dict[str, Any]]:
+        return list(self._admin_get({}).get("reports", []))
+
+    def fetch_error_report(self, report_id: int) -> dict[str, Any]:
+        return dict(self._admin_get({"id": int(report_id)}).get("report") or {})
 
     def fetch_stats(self) -> dict[str, Any]:
         config = load_runtime_config(self.base_dir)
