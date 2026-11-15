@@ -31,10 +31,16 @@ $hash = $id === '' ? null : hash_hmac('sha256', $id, (string)$config['installati
 
 // Ingest-nøglen ligger i installerne og er derfor ikke en hemmelighed: begræns pr. IP (kun som hash),
 // pr. installation og i en separat pulje for rapporter uden installations-ID.
-$ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
-if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
-    $ip = bin2hex(substr((string)inet_pton($ip), 0, 8)) . '::/64'; // én bruger har typisk hele /64-blokken
+function rate_limit_ip_key(string $ip): string {
+    if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) return $ip;
+    $packed = (string)inet_pton($ip);
+    if (substr($packed, 0, 12) === str_repeat("\0", 10) . "\xff\xff") return (string)inet_ntop(substr($packed, 12)); // ::ffff:IPv4
+    if (strncmp(bin2hex($packed), '2', 1) === 0 || strncmp(bin2hex($packed), '3', 1) === 0) {
+        return bin2hex(substr($packed, 0, 8)) . '::/64'; // global unicast: én bruger har typisk hele /64-blokken
+    }
+    return $ip;
 }
+$ip = rate_limit_ip_key((string)($_SERVER['REMOTE_ADDR'] ?? ''));
 $ipHash = hash_hmac('sha256', $ip, (string)$config['installation_hash_secret']);
 function count_since(PDO $pdo, string $where, array $params): int {
     $statement = $pdo->prepare('SELECT COUNT(*) FROM rostermate_error_reports WHERE created_at >= ?' . $where);
