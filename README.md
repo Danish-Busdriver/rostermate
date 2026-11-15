@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-blue" alt="macOS">
   <img src="https://img.shields.io/badge/platform-Windows-0078D4" alt="Windows">
-  <img src="https://img.shields.io/badge/version-1.16.0-00A9CE" alt="Version 1.16.0">
+  <img src="https://img.shields.io/badge/version-1.17.0-00A9CE" alt="Version 1.17.0">
   <img src="https://img.shields.io/badge/license-MIT-red" alt="MIT license">
 </p>
 
@@ -114,8 +114,8 @@ Det private adminpanel giver ejeren et samlet overblik over aktive og nye instal
 
 ## Hent RosterMate
 
-- [RosterMate 1.16.0 til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.16.0-macOS.pkg)
-- [RosterMate 1.16.0 til Windows](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.16.0-Windows-Setup.exe)
+- [RosterMate 1.17.0 til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.17.0-macOS.pkg)
+- [RosterMate 1.17.0 til Windows](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.17.0-Windows-Setup.exe)
 
 Teknisk installation, fejlfinding og afinstallation findes i de separate vejledninger:
 
