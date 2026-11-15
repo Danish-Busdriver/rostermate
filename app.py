@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import re
@@ -3728,6 +3729,15 @@ def is_cross_site_request() -> bool:
     """Afvis POSTs startet af andre websites (CSRF) mod ruter, der sender data ud af maskinen."""
     if request.headers.get("Sec-Fetch-Site") == "cross-site":
         return True
+    # Kun lokale værtsnavne/IP'er; et fremmed domæne, der peger på 127.0.0.1 (DNS rebinding), afvises.
+    hostname = (urlsplit(f"//{request.host}").hostname or "").lower()
+    if hostname != "localhost" and not hostname.endswith(".local"):
+        try:
+            address = ipaddress.ip_address(hostname)
+        except ValueError:
+            return True
+        if not (address.is_loopback or address.is_private or address.is_link_local):
+            return True
     origin = request.headers.get("Origin", "")
     return bool(origin) and urlsplit(origin).netloc != request.host
 

@@ -133,3 +133,11 @@ def test_report_send_rejects_cross_site_requests(tmp_path, monkeypatch):
 
     assert evil.status_code == 403 and sneaky.status_code == 403
     assert own.status_code == 200 and len(sent) == 1
+
+
+def test_cross_site_check_rejects_rebound_domains():
+    with app_module.app.test_request_context("/1234/report-problem", method="POST", headers={"Host": "evil.example:8080", "Origin": "http://evil.example:8080"}):
+        assert app_module.is_cross_site_request()
+    for host in ("localhost:8080", "127.0.0.1:8080", "192.168.0.29:8080", "[::1]:8080", "mac-mini.local:8080"):
+        with app_module.app.test_request_context("/1234/report-problem", method="POST", headers={"Host": host, "Origin": f"http://{host}"}):
+            assert not app_module.is_cross_site_request(), host
