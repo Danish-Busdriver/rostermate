@@ -224,9 +224,21 @@ def is_loopback_request() -> bool:
     return False
 
 
+def request_host_is_local() -> bool:
+    """Kun lokale værtsnavne/IP'er; et fremmed domæne, der peger på 127.0.0.1 (DNS rebinding), afvises."""
+    hostname = (urlsplit(f"//{request.host}").hostname or "").lower()
+    if hostname == "localhost" or hostname.endswith(".local"):
+        return True
+    try:
+        address = ipaddress.ip_address(hostname)
+    except ValueError:
+        return False
+    return address.is_loopback or address.is_private or address.is_link_local
+
+
 @app.before_request
 def protect_lan_routes() -> Any:
-    if is_loopback_request():
+    if is_loopback_request() and request_host_is_local():
         return None
     if request.endpoint == "calendar_file" and request.view_args:
         driver_id = normalize_driver_id(str(request.view_args.get("driver_id", "")))
@@ -3727,17 +3739,8 @@ def push_test_route(driver_id: str) -> tuple[Any, int]:
 
 def is_cross_site_request() -> bool:
     """Afvis POSTs startet af andre websites (CSRF) mod ruter, der sender data ud af maskinen."""
-    if request.headers.get("Sec-Fetch-Site") == "cross-site":
+    if request.headers.get("Sec-Fetch-Site") == "cross-site" or not request_host_is_local():
         return True
-    # Kun lokale værtsnavne/IP'er; et fremmed domæne, der peger på 127.0.0.1 (DNS rebinding), afvises.
-    hostname = (urlsplit(f"//{request.host}").hostname or "").lower()
-    if hostname != "localhost" and not hostname.endswith(".local"):
-        try:
-            address = ipaddress.ip_address(hostname)
-        except ValueError:
-            return True
-        if not (address.is_loopback or address.is_private or address.is_link_local):
-            return True
     origin = request.headers.get("Origin", "")
     return bool(origin) and urlsplit(origin).netloc != request.host
 

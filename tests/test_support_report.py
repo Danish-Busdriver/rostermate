@@ -141,3 +141,25 @@ def test_cross_site_check_rejects_rebound_domains():
     for host in ("localhost:8080", "127.0.0.1:8080", "192.168.0.29:8080", "[::1]:8080", "mac-mini.local:8080"):
         with app_module.app.test_request_context("/1234/report-problem", method="POST", headers={"Host": host, "Origin": f"http://{host}"}):
             assert not app_module.is_cross_site_request(), host
+
+
+def test_rebound_domain_on_loopback_cannot_read_admin_or_dashboard():
+    app_module.app.config["TESTING"] = True
+    with app_module.app.test_client() as client:
+        rebound = client.get("/1234/admin", headers={"Host": "evil.example:8080"}, environ_base={"REMOTE_ADDR": "127.0.0.1"})
+        lan = client.get("/1234/admin", environ_base={"REMOTE_ADDR": "192.168.0.50"})
+    assert rebound.status_code == 403 and lan.status_code == 403
+
+
+def test_calendar_via_public_proxy_still_works_with_token(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(app_module, "OUTPUT_DIR", tmp_path / "output")
+    app_module.save_driver_settings("1234", {"calendar_access_token": "tok"})
+    app_module.app.config["TESTING"] = True
+    with app_module.app.test_client() as client:
+        proxied = client.get(
+            "/1234/calendar.ics?token=tok",
+            headers={"Host": "kalender.example.dk", "X-Forwarded-For": "85.1.2.3"},
+            environ_base={"REMOTE_ADDR": "127.0.0.1"},
+        )
+    assert proxied.status_code != 403
