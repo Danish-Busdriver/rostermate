@@ -32,7 +32,15 @@ def send_change_notification(
     platform_name: str | None = None,
     runner: Runner = subprocess.Popen,
 ) -> bool:
-    message = change_notification_message(changes)
+    return send_desktop_notification(change_notification_message(changes), platform_name=platform_name, runner=runner)
+
+
+def send_desktop_notification(
+    message: str,
+    *,
+    platform_name: str | None = None,
+    runner: Runner = subprocess.Popen,
+) -> bool:
     if not message:
         return False
     active_platform = platform_name or sys.platform
