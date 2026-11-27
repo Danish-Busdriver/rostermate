@@ -171,7 +171,7 @@ Indsæt eget domæne og chaufførnummer i `Caddyfile.local`. Filen må ikke comm
 
 Mac’en skal have en reserveret lokal IP, domænet skal pege på routerens offentlige IP, og forbindelsen må ikke være blokeret af CGNAT. Brug DDNS, hvis den offentlige IP kan ændre sig.
 
-Dashboardets ICS-kort viser en QR-kode til telefonens kalenderabonnement (den offentlige adresse, hvis den er sat, ellers adressen på samme Wi-Fi). Scan den med iPhone-kameraet for at abonnere, eller brug **Kopiér link**.
+Dashboardets ICS-kort viser en QR-kode til telefonens kalenderabonnement (den offentlige adresse, hvis den er sat, ellers adressen på samme Wi-Fi). Scan den med telefonens kamera for at abonnere: på iPhone trykker du **Abonner**, og på Android installerer du først den gratis app [ICSx⁵](https://icsx5.bitfire.at/), som tager imod linket og lægger vagterne i telefonens kalender. Du kan også bruge **Kopiér link**.
 
 ## Test installationen
 

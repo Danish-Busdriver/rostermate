@@ -36,7 +36,7 @@ Vælg selv, hvor mange dage der skal hentes. RosterMate følger perioden på tv�
 - Valgfri synkroniseringsperiode, som huskes efter genstart
 - ICS-kalender til Apple Kalender, iPhone og andre kalenderapps
 - Kalenderlink til samme computer, lokalt netværk eller en valgfri HTTPS-adresse
-- QR-kode og Kopiér-knap, så kalenderen kan abonneres fra iPhone på få sekunder
+- QR-kode og Kopiér-knap, så kalenderen kan abonneres fra iPhone eller Android (med den gratis app [ICSx⁵](https://icsx5.bitfire.at/)) på få sekunder
 - Ferie vises som "Ferie" i dashboard og kalender
 - Historik, ændringsregistrering og automatisk backup
 - **Rapportér et problem**: send en renset fejlrapport til udvikleren med ét klik, efter du har set indholdet
