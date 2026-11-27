@@ -9,7 +9,23 @@ Denne guide indeholder installation, opdatering og teknisk drift af RosterMate p
 - Adgang til den relevante SelfService-konto
 - Administratoradgang under første installation
 
-## Anbefalet installation
+## Anbefalet installation: Terminal (ingen advarsel)
+
+RosterMate er endnu ikke signeret af Apple, så en pakke hentet i browseren udløser macOS' advarsel om en ukendt udvikler. Det undgås ved at installere fra Terminal:
+
+1. Åbn **Terminal** (Programmer → Hjælpeprogrammer → Terminal, eller søg efter "Terminal" med Spotlight).
+2. Indsæt denne linje, og tryk Enter:
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/Danish-Busdriver/rostermate/main/install-mac.sh | bash
+   ```
+
+3. Skriv din Mac-adgangskode, når du bliver spurgt. Den vises ikke, mens du skriver. Tryk Enter.
+4. Vent et par minutter. RosterMate åbner selv opsætningsguiden i browseren, når installationen er færdig.
+
+Scriptet ([install-mac.sh](../install-mac.sh)) slår den seneste udgivelse op via GitHubs API og henter kun `.pkg`-filer fra RosterMates egne GitHub Releases. Det kontrollerer filens SHA-256 mod den værdi, GitHub oplyser, og installerer med macOS' indbyggede `installer`. Filer hentet med `curl` får ikke macOS' karantænemærke, og derfor viser Gatekeeper ingen advarsel. Samme kommando kan bruges igen til at opdatere eller geninstallere. Data og indstillinger bevares.
+
+## Installation med download i browseren
 
 Den seneste macOS-pakke udgives sammen med Windows Setup.exe under samme versionsnummer på GitHub Releases. Download `RosterMate-1.17.0-macOS.pkg`, og dobbeltklik på filen. Du behøver ikke åbne Terminal.
 

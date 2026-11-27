@@ -114,6 +114,18 @@ Det private adminpanel giver ejeren et samlet overblik over aktive og nye instal
 
 ## Hent RosterMate
 
+### Mac: installér fra Terminal (anbefalet, ingen advarsel)
+
+Åbn **Terminal** (Programmer → Hjælpeprogrammer → Terminal), indsæt denne linje og tryk Enter:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Danish-Busdriver/rostermate/main/install-mac.sh | bash
+```
+
+Skriv din Mac-adgangskode, når du bliver spurgt. Kommandoen henter den nyeste officielle Mac-pakke fra RosterMates GitHub-udgivelser, kontrollerer filen og installerer den. Fordi pakken ikke hentes gennem browseren, viser macOS ikke advarslen om en ukendt udvikler. Du kan [læse scriptet her](install-mac.sh), før du kører det.
+
+### Download direkte
+
 - [RosterMate 1.17.0 til macOS](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.17.0-macOS.pkg)
 - [RosterMate 1.17.0 til Windows](https://github.com/Danish-Busdriver/rostermate/releases/latest/download/RosterMate-1.17.0-Windows-Setup.exe)
 
