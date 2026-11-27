@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS rostermate_error_reports (
     ip_hash CHAR(64) NULL,
     platform VARCHAR(16) NOT NULL,
     app_version VARCHAR(32) NOT NULL,
+    kind VARCHAR(16) NOT NULL DEFAULT 'fejl',
     report MEDIUMTEXT NOT NULL,
     INDEX idx_created_at (created_at),
     INDEX idx_installation (installation_hash)

@@ -45,4 +45,9 @@ function ensure_report_table(PDO $pdo): void {
     } catch (PDOException $e) {
         $pdo->exec('ALTER TABLE rostermate_error_reports ADD COLUMN ip_hash CHAR(64) NULL');
     }
+    try {
+        $pdo->query('SELECT kind FROM rostermate_error_reports LIMIT 0');
+    } catch (PDOException $e) {
+        $pdo->exec("ALTER TABLE rostermate_error_reports ADD COLUMN kind VARCHAR(16) NOT NULL DEFAULT 'fejl'");
+    }
 }

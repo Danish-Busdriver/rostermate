@@ -8,7 +8,7 @@ ensure_report_table($pdo);
 
 if (isset($_GET['id'])) {
     $statement = $pdo->prepare(
-        'SELECT id, created_at, installation_hash, platform, app_version, report FROM rostermate_error_reports WHERE id = ?'
+        'SELECT id, created_at, installation_hash, platform, app_version, kind, report FROM rostermate_error_reports WHERE id = ?'
     );
     $statement->execute([(int)$_GET['id']]);
     $row = $statement->fetch();
@@ -21,20 +21,28 @@ if (isset($_GET['id'])) {
 }
 
 $rows = $pdo->query(
-    'SELECT id, created_at, installation_hash, platform, app_version, report FROM rostermate_error_reports ORDER BY id DESC LIMIT 100'
+    'SELECT id, created_at, installation_hash, platform, app_version, kind, report FROM rostermate_error_reports ORDER BY id DESC LIMIT 100'
 )->fetchAll();
 $reports = [];
 foreach ($rows as $row) {
     $text = (string)$row['report'];
-    preg_match('/\n(\d{4}-\d\d-\d\dT[^\n]{0,220})/u', $text, $firstLog);
+    $kind = (string)$row['kind'];
+    if ($kind === 'oenske') {
+        $parts = explode("\n\n", $text, 2);
+        $summary = mb_substr(trim($parts[1] ?? $text), 0, 220);
+    } else {
+        preg_match('/\n(\d{4}-\d\d-\d\dT[^\n]{0,220})/u', $text, $firstLog);
+        $summary = $firstLog[1] ?? 'Ingen loglinjer';
+    }
     $reports[] = [
         'id' => (int)$row['id'],
         'created_at' => $row['created_at'],
         'platform' => $row['platform'],
         'app_version' => $row['app_version'],
+        'kind' => $kind,
         'installation' => $row['installation_hash'] ? substr((string)$row['installation_hash'], 0, 8) : '',
         'has_comment' => strpos($text, "\nBrugerens beskrivelse:\n") !== false,
-        'summary' => $firstLog[1] ?? 'Ingen loglinjer',
+        'summary' => $summary,
     ];
 }
 echo json_encode(['reports' => $reports]);
