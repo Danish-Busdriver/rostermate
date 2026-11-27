@@ -18,9 +18,11 @@ $id = strtolower(trim((string)($body['installation_id'] ?? '')));
 $version = trim((string)($body['version'] ?? ''));
 $platform = trim((string)($body['platform'] ?? ''));
 $report = (string)($body['report'] ?? '');
+$kind = (string)($body['kind'] ?? 'fejl'); // ældre app-versioner sender ikke kind
 if ($id !== '' && !preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $id)) fail_request(400, 'Invalid installation ID');
 if (!preg_match('/^[0-9A-Za-z.+-]{1,32}$/', $version)) fail_request(400, 'Invalid version');
 if (!in_array($platform, ['macos', 'windows', 'other'], true)) fail_request(400, 'Invalid platform');
+if (!in_array($kind, ['fejl', 'oenske'], true)) fail_request(400, 'Invalid kind');
 if (trim($report) === '' || !mb_check_encoding($report, 'UTF-8')) fail_request(400, 'Invalid report');
 if (mb_strlen($report) > MAX_REPORT_CHARS) fail_request(413, 'Report too large');
 
@@ -56,9 +58,9 @@ if ($hash === null) {
 }
 
 $insert = $pdo->prepare(
-    'INSERT INTO rostermate_error_reports (created_at, installation_hash, ip_hash, platform, app_version, report) VALUES (?, ?, ?, ?, ?, ?)'
+    'INSERT INTO rostermate_error_reports (created_at, installation_hash, ip_hash, platform, app_version, kind, report) VALUES (?, ?, ?, ?, ?, ?, ?)'
 );
-$insert->execute([$now, $hash, $ipHash, $platform, $version, $report]);
+$insert->execute([$now, $hash, $ipHash, $platform, $version, $kind, $report]);
 $newId = (int)$pdo->lastInsertId();
 $pdo->prepare('DELETE FROM rostermate_error_reports WHERE created_at < ?')
     ->execute([gmdate('Y-m-d H:i:s', time() - RETENTION_DAYS * 86400)]);

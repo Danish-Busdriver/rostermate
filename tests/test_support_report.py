@@ -75,6 +75,7 @@ def test_send_error_report_posts_to_report_endpoint(tmp_path, monkeypatch):
     assert url == "https://example.invalid/telemetry/report.php"
     assert kwargs["json"]["installation_id"] == ""  # statistik slået fra -> intet installations-ID
     assert kwargs["json"]["report"] == "rapport"
+    assert kwargs["json"]["kind"] == "fejl"
 
 
 def test_send_error_report_explains_rate_limit(tmp_path, monkeypatch):
@@ -141,3 +142,24 @@ def test_cross_site_check_rejects_rebound_domains():
     for host in ("localhost:8080", "127.0.0.1:8080", "192.168.0.29:8080", "[::1]:8080", "mac-mini.local:8080"):
         with app_module.app.test_request_context("/1234/report-problem", method="POST", headers={"Host": host, "Origin": f"http://{host}"}):
             assert not app_module.is_cross_site_request(), host
+
+
+def test_wish_page_sends_wish_without_personal_data(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(app_module, "STORAGE_ROOT", tmp_path)
+    sent = []
+    monkeypatch.setattr(TelemetryClient, "send_error_report", lambda self, report, kind="fejl": sent.append((kind, report)) or "3")
+    app_module.app.config["TESTING"] = True
+
+    with app_module.app.test_client() as client:
+        page = client.get("/16134/wish").get_data(as_text=True)
+        empty = client.post("/16134/wish", data={"wish": "  "})
+        cross = client.post("/16134/wish", data={"wish": "Mere tid"}, headers={"Origin": "https://evil.example"})
+        ok = client.post("/16134/wish", data={"wish": "Vis timer for hele året"})
+
+    assert "Ønsk en funktion" in page
+    assert empty.status_code == 400 and cross.status_code == 403
+    assert ok.status_code == 200 and len(sent) == 1
+    kind, report = sent[0]
+    assert kind == "oenske" and report.endswith("\n\nVis timer for hele året")
+    assert "16134" not in report
