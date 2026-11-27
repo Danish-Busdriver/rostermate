@@ -2909,7 +2909,7 @@ def index(driver_id: str) -> str:
                                     {% endif %}
                                     <div class="calendar-qr" style="margin-top:0.9rem;">
                                         {{ phone_calendar_qr }}
-                                        <div class="small" style="margin-top:0.4rem;">Scan med iPhone-kameraet for at abonnere på kalenderen.</div>
+                                        <div class="small" style="margin-top:0.4rem;">Scan med telefonens kamera. iPhone: tryk Abonner. Android: installér først appen ICSx⁵, så åbner koden i den.</div>
                                         <button type="button" class="button-link ghost" style="margin-top:0.6rem;" data-copy="{{ phone_calendar_url }}" onclick="copyLink(this)">Kopiér link</button>
                                     </div>
                                     <script>
