@@ -85,7 +85,7 @@ CHANGES_PATH = OUTPUT_DIR / "changes.json"
 ICS_PATH = OUTPUT_DIR / "vagter.ics"
 ERROR_LOG_PATH = STORAGE_ROOT / "logs" / "errors.jsonl"
 LOCAL_TIMEZONE = "Europe/Copenhagen"
-APP_VERSION = "1.17.0"
+APP_VERSION = "1.18.0"
 SYNC_LOCKS: dict[str, threading.Lock] = {}
 SYNC_LOCKS_GUARD = threading.Lock()
 
