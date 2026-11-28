@@ -35,7 +35,14 @@ from markupsafe import Markup
 from launch_agent import sync_launch_agent_preference
 from installer_update import InstallerUpdateError, download_and_launch_installer
 from login import launch_authenticated_context, login_manager, read_stable_page_content, save_session_storage
-from notifications import change_notification_message, ntfy_topic_url, send_change_notification, send_push_notification
+from hours import MAX_DAYS_IN_A_ROW, deviation_label, flagged_shifts, hours_overview, streak_warnings, streaks_touching
+from notifications import (
+    change_notification_message,
+    ntfy_topic_url,
+    send_change_notification,
+    send_desktop_notification,
+    send_push_notification,
+)
 from port_config import configured_port, port_is_available, save_port, valid_port
 from release_update import check_for_release_update
 from runtime_diagnostics import collect_runtime_diagnostics
@@ -153,7 +160,9 @@ def _run_background_sync_flow(
             history_prefix,
         )
         save_driver_settings(driver_id, {**settings, "selfservice_session_verified": True})
-        notify_if_schedule_changed(settings, result["changes"], had_existing_events=had_existing_events)
+        notify_if_schedule_changed(
+            settings, result["changes"], had_existing_events=had_existing_events, events=result.get("events")
+        )
         login_manager.update(
             flow_id,
             state="synced",
@@ -483,6 +492,7 @@ def driver_urls(driver_id: str) -> dict[str, str]:
         "install_update_url": f"{base_path}/install-update",
         "error_report_url": f"{base_path}/error-report",
         "report_problem_url": f"{base_path}/report-problem",
+        "wish_url": f"{base_path}/wish",
         "admin_url": f"{base_path}/admin",
         "calendar_url": f"{base_path}/calendar.ics",
     }
@@ -537,13 +547,32 @@ def notify_if_schedule_changed(
     changes: list[dict[str, Any]],
     *,
     had_existing_events: bool,
+    events: list[dict[str, Any]] | None = None,
 ) -> bool:
     if not had_existing_events:
         return False
-    sent = bool(settings.get("notify_on_changes", True)) and send_change_notification(changes)
-    if settings.get("push_enabled") and settings.get("push_topic"):
+    desktop = bool(settings.get("notify_on_changes", True))
+    push_topic = str(settings.get("push_topic") or "") if settings.get("push_enabled") else ""
+    sent = desktop and send_change_notification(changes)
+    if push_topic:
         # Kun den korte tælletekst – aldrig chaufførnummer eller vagtdetaljer, da ntfy-emner er offentlige.
-        sent = send_push_notification(str(settings["push_topic"]), change_notification_message(changes)) or sent
+        sent = send_push_notification(push_topic, change_notification_message(changes)) or sent
+
+    # Advar kun, når en ændring skaber/forlænger et for langt stræk, så samme advarsel ikke gentages ved hver sync.
+    changed_dates = {
+        str(((change.get("new") if change.get("type") == "changed" else change.get("item")) or {}).get("date", ""))
+        for change in changes
+        if change.get("type") in ("added", "changed")
+    }
+    for start, end, length in streaks_touching(events or [], changed_dates):
+        if desktop:
+            sent = send_desktop_notification(
+                f"{length} arbejdsdage i træk ({start:%d.%m}–{end:%d.%m}). Maks er {MAX_DAYS_IN_A_ROW}."
+            ) or sent
+        if push_topic:
+            sent = send_push_notification(
+                push_topic, f"Vagtplanen har nu over {MAX_DAYS_IN_A_ROW} arbejdsdage i træk. Se dashboardet."
+            ) or sent
     return sent
 
 
@@ -635,7 +664,12 @@ def build_week_navigation(events: list[dict[str, Any]], week_offset: int) -> dic
     }
 
 
-def build_upcoming_shift_cards(events: list[dict[str, Any]], week_start: date, week_end: date) -> list[dict[str, Any]]:
+def build_upcoming_shift_cards(
+    events: list[dict[str, Any]],
+    week_start: date,
+    week_end: date,
+    flagged: set[tuple[str, str]] | None = None,
+) -> list[dict[str, Any]]:
     weekday_names = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag", "Søndag"]
     grouped_days: list[dict[str, Any]] = []
     seen_signatures: set[tuple[str, str, str]] = set()
@@ -682,6 +716,7 @@ def build_upcoming_shift_cards(events: list[dict[str, Any]], week_start: date, w
                 "type_label": shift_type_label,
                 "type_class": shift_type_class,
                 "icon": shift_icon,
+                "hours_note": deviation_label(event) if flagged and (shift_date, title) in flagged else "",
             }
         )
 
@@ -1108,71 +1143,104 @@ def open_selfservice_calendar(page: Any, selfservice_url: str) -> None:
     page.wait_for_selector("#Calendar", state="attached", timeout=30000)
 
 
+def _wait_for_selfservice_idle(page: Any) -> None:
+    try:
+        page.wait_for_selector("#Loading", state="hidden", timeout=15000)
+    except Exception:
+        pass
+
+
+def _ensure_monthly_calendar(page: Any) -> None:
+    """Kalenderen kan åbne i ugevisning; så flytter pilene kun en uge ad gangen."""
+    try:
+        if page.locator("#Calendar").get_attribute("data-employee-calendar-mode") == "Weekly":
+            page.locator("#MonthDisplayMode").click(timeout=10000)
+            page.wait_for_selector('#Calendar[data-employee-calendar-mode="Monthly"]', state="attached", timeout=15000)
+            _wait_for_selfservice_idle(page)
+    except Exception:
+        pass
+
+
+def _select_month_in_dropdown(page: Any, target_year: int, target_month: int) -> bool:
+    return bool(
+        page.evaluate(
+            """target => {
+                const input = document.querySelector('#MonthAndYearSelectorKendoDDList');
+                const widget = input && window.jQuery
+                    ? window.jQuery(input).data('kendoDropDownList')
+                    : null;
+                if (!widget || !widget.dataSource) return false;
+                const item = widget.dataSource.data().find(value =>
+                    Number(value.Year) === target.year && Number(value.Month) === target.month
+                );
+                if (!item) return false;
+                widget.value(item.Value);
+                // SelfService navigerer kun på en ægte DOM-change på <select>, ikke Kendos egen trigger('change').
+                widget.element[0].dispatchEvent(new Event('change', {bubbles: true}));
+                return true;
+            }""",
+            {"year": target_year, "month": target_month},
+        )
+    )
+
+
+def _wait_for_month_change(page: Any, previous: tuple[int, int], seconds: float = 20) -> bool:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        try:
+            calendar = page.locator("#Calendar")
+            shown = (int(calendar.get_attribute("data-year") or 0), int(calendar.get_attribute("data-month") or 0))
+            if shown != previous and shown[0] >= 2000:
+                _wait_for_selfservice_idle(page)
+                return True
+        except Exception:
+            pass
+        try:
+            page.wait_for_timeout(250)
+        except Exception:
+            time.sleep(0.25)
+    return False
+
+
 def navigate_selfservice_month(page: Any, target_year: int, target_month: int) -> None:
     """Navigate the employee calendar without assuming its initial month or exact layout."""
     target = (target_year, target_month)
+    _wait_for_selfservice_idle(page)
+    _ensure_monthly_calendar(page)
     for _ in range(18):
         current = displayed_selfservice_month(page)
         if current == target:
             return
 
-        forward = current < target
-        selector = (
-            "#NextMonth:visible, #MonthAndYearSelectorAndNavigators .CalendarNextPeriod:visible"
-            if forward
-            else "#PreviousMonth:visible, #MonthAndYearSelectorAndNavigators .CalendarPreviousPeriod:visible"
-        )
-        clicked = False
+        # Kun månedspilene: ".CalendarNextPeriod" rammer også ugepilene.
+        selector = "#NextMonth:visible" if current < target else "#PreviousMonth:visible"
         try:
             page.locator(selector).first.click(timeout=15000)
-            clicked = True
+            moved = _wait_for_month_change(page, current)
         except Exception:
-            clicked = bool(
-                page.evaluate(
-                    """target => {
-                        const input = document.querySelector('#MonthAndYearSelectorKendoDDList');
-                        const widget = input && window.jQuery
-                            ? window.jQuery(input).data('kendoDropDownList')
-                            : null;
-                        if (!widget || !widget.dataSource) return false;
-                        const item = widget.dataSource.data().find(value =>
-                            Number(value.Year) === target.year && Number(value.Month) === target.month
-                        );
-                        if (!item) return false;
-                        widget.value(item.Value);
-                        widget.trigger('change');
-                        return true;
-                    }""",
-                    {"year": target_year, "month": target_month},
+            moved = False
+        if not moved:
+            # Pilen virkede ikke (fx skjult eller dækket af en boks): vælg måneden direkte i rullelisten.
+            if not _select_month_in_dropdown(page, target_year, target_month):
+                raise RuntimeError("SelfService viste ingen brugbar månedsnavigation")
+            if not _wait_for_month_change(page, current):
+                raise RuntimeError(
+                    f"SelfService skiftede ikke til {target_month:02d}/{target_year} efter månedsvalget"
                 )
-            )
-        if not clicked:
-            raise RuntimeError("SelfService viste ingen brugbar månedsnavigation")
-
-        deadline = time.monotonic() + 30
-        while time.monotonic() < deadline:
-            try:
-                calendar = page.locator("#Calendar")
-                displayed_year = int(calendar.get_attribute("data-year") or 0)
-                displayed_month = int(calendar.get_attribute("data-month") or 0)
-                if (displayed_year, displayed_month) == target:
-                    break
-            except Exception:
-                pass
-            try:
-                page.wait_for_timeout(250)
-            except Exception:
-                time.sleep(0.25)
-        else:
-            raise RuntimeError(
-                f"SelfService skiftede ikke til {target_month:02d}/{target_year} efter månedsvalget"
-            )
-        try:
-            page.wait_for_selector("#Loading", state="hidden", timeout=15000)
-        except Exception:
-            pass
 
     raise RuntimeError(f"SelfService kunne ikke navigere til {target_month:02d}/{target_year}")
+
+
+def save_selfservice_debug(page: Any, output_dir: Path, name: str) -> None:
+    """Gem skærmbillede og HTML, når SelfService opfører sig uventet. Må aldrig fejle selv."""
+    try:
+        page.screenshot(path=str(output_dir / f"debug_{name}.png"), full_page=True)
+    except Exception:
+        pass
+    try:
+        (output_dir / f"debug_{name}.html").write_text(page.content()[:400000], encoding="utf-8")
+    except Exception:
+        pass
 
 
 def selfservice_login_form_visible(page: Any) -> bool:
@@ -1370,6 +1438,7 @@ def fetch_selfservice_schedule(
             try:
                 navigate_selfservice_month(page, today_month.year, today_month.month)
             except Exception as exc:
+                save_selfservice_debug(page, paths["output_dir"], "month_failure")
                 context.close()
                 if browser is not None:
                     browser.close()
@@ -1397,6 +1466,7 @@ def fetch_selfservice_schedule(
                     if month_html is not None:
                         html_pages.append(month_html)
                 except Exception as exc:
+                    save_selfservice_debug(page, paths["output_dir"], "month_failure")
                     context.close()
                     if browser is not None:
                         browser.close()
@@ -1533,6 +1603,7 @@ def run_interactive_initial_sync(
             settings,
             result["changes"],
             had_existing_events=had_existing_events,
+            events=result.get("events"),
         )
         save_driver_settings(driver_id, {**settings, "selfservice_session_verified": True})
     finally:
@@ -1632,6 +1703,7 @@ def run_automatic_sync_cycle(now: datetime | None = None) -> list[dict[str, str]
                     completed_settings,
                     result.get("changes") or [],
                     had_existing_events=had_existing_events,
+                    events=result.get("events"),
                 )
                 outcomes.append({
                     "driver_id": driver_id,
@@ -2001,7 +2073,10 @@ def index(driver_id: str) -> str:
     history = load_history(paths["history_path"])
     last_sync = format_timestamp(history[-1].get("timestamp") if history else None)
     next_events = select_next_calendar_events(events)
-    upcoming_shifts = build_upcoming_shift_cards(next_events, date.today(), date.max)
+    flagged = flagged_shifts(events, settings["employment_type"], history)
+    upcoming_shifts = build_upcoming_shift_cards(next_events, date.today(), date.max, flagged)
+    hours_rows = hours_overview(events)
+    work_streak_warnings = streak_warnings(events)
     today_tomorrow = build_today_tomorrow(events)
     dashboard_changes = [describe_change(change) for change in changes[:5]]
     history_count = len(history)
@@ -2183,6 +2258,34 @@ def index(driver_id: str) -> str:
                 .sync-error-banner strong { display: block; margin-bottom: 0.25rem; }
                 .sync-error-banner form { margin-top: 0.7rem; }
                 .sync-error-banner button { width: auto; margin: 0; }
+                .streak-banner {
+                    margin-top: 1rem;
+                    padding: 0.95rem 1rem;
+                    border-radius: 18px;
+                    background: rgba(255, 244, 219, 0.97);
+                    border: 1px solid rgba(154, 103, 0, 0.25);
+                    color: #6b4700;
+                }
+                .streak-banner strong { display: block; margin-bottom: 0.25rem; }
+                .shift-hours-note {
+                    display: inline-block;
+                    margin-top: 0.3rem;
+                    padding: 0.1rem 0.5rem;
+                    border-radius: 999px;
+                    background: var(--warning-bg);
+                    color: var(--warning-text);
+                    font-size: 0.8rem;
+                    font-weight: 600;
+                }
+                .hours-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.6rem; }
+                .hours-list li { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; padding-bottom: 0.6rem; border-bottom: 1px solid var(--border); }
+                .hours-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+                .hours-list .small { display: block; }
+                .hours-figures { text-align: right; }
+                .hours-figures strong { display: block; font-variant-numeric: tabular-nums; }
+                .hours-over { color: var(--warning-text); font-size: 0.85rem; font-weight: 600; }
+                .hours-under { color: var(--accent-strong); font-size: 0.85rem; font-weight: 600; }
+                .hours-even { color: var(--muted); font-size: 0.85rem; }
                 .hero {
                     background:
                         linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)),
@@ -2741,6 +2844,12 @@ def index(driver_id: str) -> str:
                                 <a href="{{ urls.report_problem_url }}" style="color:inherit; text-decoration:underline; font-weight:600;">Send fejlrapport til udvikleren</a>
                             </div>
                             {% endif %}
+                            {% for streak in work_streak_warnings %}
+                            <div class="streak-banner" role="alert">
+                                <strong>{{ streak.days }} arbejdsdage i træk</strong>
+                                <span>{{ streak.start }}–{{ streak.end }}. Du må højst arbejde {{ max_days_in_a_row }} dage i træk, så tjek planen.</span>
+                            </div>
+                            {% endfor %}
                             {% if needs_selfservice_setup %}
                             <div class="setup-banner">
                                 <strong>Første opsætning mangler</strong>
@@ -2833,6 +2942,7 @@ def index(driver_id: str) -> str:
                                                 <span class="shift-type">{{ shift.type_label }}</span>
                                             </div>
                                             <div class="shift-time">{{ shift.time_label }}</div>
+                                            {% if shift.hours_note %}<div class="shift-hours-note">{{ shift.hours_note }}</div>{% endif %}
                                         </div>
                                     </div>
                                     {% endfor %}
@@ -2847,6 +2957,22 @@ def index(driver_id: str) -> str:
                         </div>
                     </div>
                     <div class="stack">
+                        <div class="card">
+                            <div class="card-head">
+                                <div>
+                                    <h2>Timer</h2>
+                                    <p class="small">Summen af vagternes tid og forskellen til normal tid. Kun hentede vagter tæller med.</p>
+                                </div>
+                            </div>
+                            <ul class="hours-list">
+                                {% for row in hours_rows %}
+                                <li>
+                                    <div><strong>{{ row.label }}</strong><span class="small">{{ row.period }}</span></div>
+                                    <div class="hours-figures"><strong>{{ row.total }}</strong><span class="{{ row.diff_class }}">{{ row.diff_label }}</span></div>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
                         <div class="card">
                             <div class="card-head">
                                 <div>
@@ -2891,9 +3017,9 @@ def index(driver_id: str) -> str:
                                     <div style="margin-top:0.8rem;"><a class="button-link ghost" href="{{ urls.history_url }}">Vis log</a></div>
                                 </div>
                                 <div class="quick-card">
-                                    <strong>Fejlrapport</strong>
-                                    <div class="small">Hent en lokal rapport med runtime-status og seneste fejl.</div>
-                                    <div style="margin-top:0.8rem; display:flex; gap:0.5rem; flex-wrap:wrap;"><a class="button-link ghost" href="{{ urls.report_problem_url }}">Send til udvikleren</a><a class="button-link ghost" href="{{ urls.error_report_url }}">Hent rapport</a></div>
+                                    <strong>Fejl og ønsker</strong>
+                                    <div class="small">Send en fejlrapport eller et ønske til en ny funktion til udvikleren.</div>
+                                    <div style="margin-top:0.8rem; display:flex; gap:0.5rem; flex-wrap:wrap;"><a class="button-link ghost" href="{{ urls.report_problem_url }}">Send fejlrapport</a><a class="button-link ghost" href="{{ urls.wish_url }}">Ønsk en funktion</a><a class="button-link ghost" href="{{ urls.error_report_url }}">Hent rapport</a></div>
                                 </div>
                                 <div class="quick-card">
                                     <strong>ICS eksport</strong>
@@ -2909,7 +3035,7 @@ def index(driver_id: str) -> str:
                                     {% endif %}
                                     <div class="calendar-qr" style="margin-top:0.9rem;">
                                         {{ phone_calendar_qr }}
-                                        <div class="small" style="margin-top:0.4rem;">Scan med iPhone-kameraet for at abonnere på kalenderen.</div>
+                                        <div class="small" style="margin-top:0.4rem;">Scan med telefonens kamera. iPhone: tryk Abonner. Android: installér først appen ICSx⁵, så åbner koden i den.</div>
                                         <button type="button" class="button-link ghost" style="margin-top:0.6rem;" data-copy="{{ phone_calendar_url }}" onclick="copyLink(this)">Kopiér link</button>
                                     </div>
                                     <script>
@@ -2948,6 +3074,9 @@ def index(driver_id: str) -> str:
         event_count=len(events),
         upcoming_shifts=upcoming_shifts,
         today_tomorrow=today_tomorrow,
+        hours_rows=hours_rows,
+        work_streak_warnings=work_streak_warnings,
+        max_days_in_a_row=MAX_DAYS_IN_A_ROW,
         dashboard_changes=dashboard_changes,
         history_count=history_count,
         ics_ready=ics_ready,
@@ -3091,6 +3220,7 @@ def sync_route(driver_id: str) -> tuple[Any, int]:
                 updated_settings,
                 result["changes"],
                 had_existing_events=had_existing_events,
+                events=result.get("events"),
             )
             return jsonify({
                 "status": "ok",
@@ -3560,6 +3690,7 @@ def settings_page(driver_id: str) -> str:
                                         <option value="timeloennet" {% if settings.employment_type == 'timeloennet' %}selected{% endif %}>Timelønnet (dagligt mellem kl. 9 og 16)</option>
                                     </select>
                                     <div class="field-hint">Denne profil har faste, tilfældigt valgte tider: {{ automatic_schedule }}.</div>
+                                    <div class="field-hint">Bruges også til at markere vagter, hvor Tid afviger fra Normal tid: fast turnus får alle markeret, ramme ansat kun vagter ændret efter kl. 12 dagen før.</div>
                                 </div>
                                 <label class="row"><input type="checkbox" name="automatic_sync_enabled" value="true" {% if settings.automatic_sync_enabled %}checked{% endif %}> Kør automatisk synkronisering for denne profil</label>
                                 <label class="row"><input type="checkbox" name="notify_on_changes" value="true" {% if settings.notify_on_changes %}checked{% endif %}> Vis en systembesked, når vagter ændres</label>
@@ -3832,6 +3963,61 @@ def report_problem_send(driver_id: str) -> tuple[Any, int]:
     return jsonify({"status": "ok", "message": f"Tak! Fejlrapporten er sendt.{suffix}"}), 200
 
 
+REPORT_PAGE_STYLE = REPORT_PROBLEM_TEMPLATE[
+    REPORT_PROBLEM_TEMPLATE.index("<style>"):REPORT_PROBLEM_TEMPLATE.index("</style>") + len("</style>")
+]
+WISH_TEMPLATE = """
+<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ønsk en funktion · RosterMate</title>""" + REPORT_PAGE_STYLE + """</head><body><main class="container">
+<a href="{{ urls.dashboard_url }}">← Til dashboard</a>
+<h1>Ønsk en funktion</h1>
+<p>Mangler RosterMate noget, eller kan noget gøres bedre? Skriv det her, så havner det direkte hos udvikleren.</p>
+<form class="panel" id="wish-form">
+  <label for="wish">Dit ønske</label>
+  <textarea id="wish" name="wish" maxlength="2000" required placeholder="Fx: Jeg vil gerne kunne se mine timer for hele året."></textarea>
+  <p>Ønsket sendes uden navn. Kun RosterMate-version og styresystem kommer med. Skriv ikke personlige oplysninger her.</p>
+  <div class="actions"><button type="submit" id="send">Send ønske</button><span id="result" role="status"></span></div>
+</form>
+</main>
+<script>
+document.getElementById('wish-form').addEventListener('submit', function (event) {
+  event.preventDefault();
+  var button = document.getElementById('send'), result = document.getElementById('result');
+  button.disabled = true; result.className = ''; result.textContent = 'Sender…';
+  fetch('{{ urls.wish_url }}', {method: 'POST', body: new FormData(event.target)})
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      result.className = data.status === 'ok' ? 'ok' : 'error';
+      result.textContent = data.message;
+      if (data.status === 'ok') { document.getElementById('wish').value = ''; }
+      button.disabled = false;
+    })
+    .catch(function () { result.className = 'error'; result.textContent = 'RosterMate svarede ikke. Prøv igen.'; button.disabled = false; });
+});
+</script>
+</body></html>
+"""
+
+
+@app.route("/<driver_id>/wish")
+def wish_page(driver_id: str) -> str:
+    return render_template_string(WISH_TEMPLATE, urls=driver_urls(normalize_driver_id(driver_id)))
+
+
+@app.route("/<driver_id>/wish", methods=["POST"])
+def wish_send(driver_id: str) -> tuple[Any, int]:
+    if is_cross_site_request():
+        return jsonify({"status": "error", "message": "Afvist: anmodningen kom ikke fra RosterMate."}), 403
+    wish = str(request.form.get("wish", "")).strip()[:2000]
+    if len(wish) < 5:
+        return jsonify({"status": "error", "message": "Skriv dit ønske, før du sender."}), 400
+    try:
+        telemetry_client().send_error_report(f"Ønske til RosterMate\nVersion: {APP_VERSION}\n\n{wish}", kind="oenske")
+    except RuntimeError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 502
+    return jsonify({"status": "ok", "message": "Tak! Dit ønske er sendt til udvikleren."}), 200
+
+
 @app.route("/<driver_id>/admin")
 def admin_page(driver_id: str) -> str:
     safe_driver_id = normalize_driver_id(driver_id)
@@ -3887,7 +4073,7 @@ def admin_page(driver_id: str) -> str:
         <section class="cards" style="margin-top:1rem"><div class="card"><span>Nye · 7 dage</span><strong>{{ stats.new_7_days }}</strong></div><div class="card"><span>Nye · 30 dage</span><strong>{{ stats.new_30_days }}</strong></div><div class="card"><span>På version {{ app_version }}</span><strong>{{ current_version_count }}</strong></div><div class="card"><span>Opdateret · 30 dage</span><strong>{{ version_adoption }}%</strong></div></section>
         <section class="panel" style="margin-top:1rem"><h2>Sync-aktivitet · 30 dage</h2><div class="chart" aria-label="Installationer der synkroniserede pr. dag">{% for item in activity %}<div class="bar" style="height:{{ item.height }}%" data-label="{{ item.label }} · {{ item.count }}" title="{{ item.label }} · {{ item.count }} installationer"></div>{% endfor %}</div><p class="chart-note">Hver søjle viser antal forskellige installationer, der sendte mindst ét sync-livstegn den pågældende dag.</p></section>
         <section class="grid"><div class="panel"><h2>Platforme · 30 dage</h2>{% for item in stats.platforms %}<div class="row"><span>{{ 'Windows' if item.platform == 'windows' else 'macOS' if item.platform == 'macos' else item.platform }}</span><strong>{{ item.count }}</strong></div>{% else %}<p>Ingen data endnu.</p>{% endfor %}</div><div class="panel"><h2>Versioner · 30 dage</h2>{% for item in stats.versions %}<div class="row"><span>{{ item.version }}</span><strong>{{ item.count }}</strong></div>{% else %}<p>Ingen data endnu.</p>{% endfor %}</div></section>
-        <section class="panel" style="margin-top:1rem"><h2>Fejlrapporter</h2>{% if reports_error %}<p class="chart-note">Fejlrapporterne kunne ikke hentes: {{ reports_error }}</p>{% endif %}{% for item in reports %}<a class="row" href="{{ urls.admin_url }}/reports/{{ item.id }}"><span>#{{ item.id }} · {{ item.created_at }} · {{ 'Windows' if item.platform == 'windows' else 'macOS' if item.platform == 'macos' else item.platform }} {{ item.app_version }}{% if item.has_comment %} · med beskrivelse{% endif %}<br><small style="color:var(--muted);overflow-wrap:anywhere">{{ item.summary }}</small></span><strong>Åbn</strong></a>{% else %}{% if not reports_error %}<p>Ingen fejlrapporter endnu.</p>{% endif %}{% endfor %}</section>
+        <section class="panel" style="margin-top:1rem"><h2>Fejlrapporter og ønsker</h2>{% if reports_error %}<p class="chart-note">Fejlrapporterne kunne ikke hentes: {{ reports_error }}</p>{% endif %}{% for item in reports %}<a class="row" href="{{ urls.admin_url }}/reports/{{ item.id }}"><span><strong>{{ 'Ønske' if item.kind == 'oenske' else 'Fejl' }}</strong> #{{ item.id }} · {{ item.created_at }} · {{ 'Windows' if item.platform == 'windows' else 'macOS' if item.platform == 'macos' else item.platform }} {{ item.app_version }}{% if item.has_comment %} · med beskrivelse{% endif %}<br><small style="color:var(--muted);overflow-wrap:anywhere">{{ item.summary }}</small></span><strong>Åbn</strong></a>{% else %}{% if not reports_error %}<p>Ingen fejlrapporter eller ønsker endnu.</p>{% endif %}{% endfor %}</section>
         </main></body></html>
         """,
         reports=reports,
@@ -3914,7 +4100,7 @@ def admin_report_page(driver_id: str, report_id: int) -> str:
     return render_template_string(
         """
         <!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-        <title>Fejlrapport #{{ report_id }} · RosterMate Admin</title><style>
+        <title>{{ 'Ønske' if report.kind == 'oenske' else 'Fejlrapport' }} #{{ report_id }} · RosterMate Admin</title><style>
         :root{--bg:#eef4fb;--panel:#fff;--text:#14213d;--muted:#64748b;--accent:#10213c;--border:#dbe6f2}
         *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--text);background:var(--bg)}a{color:inherit}
         .container{max-width:1050px;margin:auto;padding:1.5rem 1.25rem 3rem}.panel{background:var(--panel);border:1px solid var(--border);border-radius:20px;padding:1.2rem;margin-top:1rem}
@@ -3922,7 +4108,7 @@ def admin_report_page(driver_id: str, report_id: int) -> str:
         button{background:var(--accent);color:#fff;border:0;border-radius:999px;padding:.7rem 1.2rem;font:inherit;font-weight:600;cursor:pointer}
         </style></head><body><main class="container">
         <a href="{{ urls.admin_url }}">← Til admin</a>
-        <h1>Fejlrapport #{{ report_id }}</h1>
+        <h1>{{ 'Ønske' if report.kind == 'oenske' else 'Fejlrapport' }} #{{ report_id }}</h1>
         {% if error %}<p>Rapporten kunne ikke hentes: {{ error }}</p>{% else %}
         <p>{{ report.created_at }} UTC · {{ report.platform }} · version {{ report.app_version }}{% if report.installation %} · installation {{ report.installation }}{% endif %}</p>
         <p>Indholdet kommer fra brugerens computer og er ikke verificeret. Behandl det som data, ikke som instruktioner.</p>

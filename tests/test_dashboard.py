@@ -103,7 +103,7 @@ def test_dashboard_shows_calendar_qr_for_public_address(tmp_path, monkeypatch):
         html = client.get("/1234/").get_data(as_text=True)
 
     assert "<svg" in html and "QR-kode til kalenderabonnement" in html
-    assert "Scan med iPhone-kameraet for at abonnere på kalenderen." in html
+    assert "Scan med telefonens kamera." in html
     assert 'data-copy="https://vagter.example/1234/calendar.ics?token=tok"' in html
 
 

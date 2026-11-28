@@ -111,7 +111,7 @@ def test_selfservice_month_navigation_reads_actual_month_and_uses_next_button():
     navigate_selfservice_month(page, 2026, 8)
 
     assert (page.year, page.month) == (2026, 8)
-    assert page.clicked == ["#NextMonth:visible, #MonthAndYearSelectorAndNavigators .CalendarNextPeriod:visible"]
+    assert page.clicked == ["#NextMonth:visible"]
 
 
 def test_selfservice_month_navigation_uses_dropdown_when_windows_layout_has_no_button():

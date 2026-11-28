@@ -152,8 +152,8 @@ class TelemetryClient:
             self.save_state(state)
         return True
 
-    def send_error_report(self, report: str) -> str:
-        """Send en brugergodkendt fejlrapport. Returnerer rapport-ID'et; fejl rejses som RuntimeError."""
+    def send_error_report(self, report: str, kind: str = "fejl") -> str:
+        """Send en brugergodkendt fejlrapport eller et ønske (kind="oenske"). Returnerer rapport-ID'et; fejl rejses som RuntimeError."""
         config = load_runtime_config(self.base_dir)
         heartbeat_url = config.get("heartbeat_url", "")
         key = config.get("ingest_key", "")
@@ -169,16 +169,17 @@ class TelemetryClient:
                     "version": self.version,
                     "platform": self._platform_name(),
                     "report": report[:MAX_REPORT_CHARS],
+                    "kind": kind,
                 },
                 headers={"X-RosterMate-Key": key, "User-Agent": USER_AGENT_TEMPLATE.format(version=self.version)},
                 timeout=15,
             )
             if response.status_code == 429:
-                raise RuntimeError("Der er sendt mange fejlrapporter i dag. Prøv igen i morgen.")
+                raise RuntimeError("Der er sendt mange fejlrapporter og ønsker i dag. Prøv igen i morgen.")
             response.raise_for_status()
             return str(response.json().get("id", ""))
         except (requests.RequestException, ValueError) as exc:
-            raise RuntimeError("Fejlrapporten kunne ikke sendes. Tjek internetforbindelsen og prøv igen.") from exc
+            raise RuntimeError("Det kunne ikke sendes. Tjek internetforbindelsen og prøv igen.") from exc
 
     def _admin_get(self, params: dict[str, Any]) -> dict[str, Any]:
         config = load_runtime_config(self.base_dir)
